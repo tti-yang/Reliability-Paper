@@ -1,0 +1,1166 @@
+---
+title: "Motion-Corrected Analysis (Interactive)"
+author: "Tien"
+date: "2026-07-26"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+required_packages <- c(
+  "shiny", "tidyverse", "lme4", "lmerTest", "car", "patchwork",
+  "flextable"
+)
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+if (length(missing_packages) > 0) {
+  stop(
+    "Install these packages before running the document: ",
+    paste(missing_packages, collapse = ", ")
+  )
+}
+
+library(shiny)
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(patchwork)
+library(flextable)
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+<style>
+.main-container {
+  max-width: 1500px !important;
+}
+.shiny-plot-output {
+  width: 100% !important;
+}
+</style>
+
+# Choose the motion-exclusion rule
+
+Choose the framewise-displacement (FD) cutoff and the percentage of excluded
+TRs that causes a run to be removed. The models, sample summary, and plots
+below update automatically.
+
+```{r controls}
+fluidRow(
+  column(
+    width = 5,
+    selectInput(
+      "fd_cutoff",
+      "FD cutoff",
+      choices = c("0.5 mm" = "0.5", "0.4 mm" = "0.4"),
+      selected = "0.5"
+    )
+  ),
+  column(
+    width = 7,
+    sliderInput(
+      "pct_cutoff",
+      "Exclude a run when percentage of excluded TRs is at least:",
+      min = 0,
+      max = 100,
+      value = 20,
+      step = 1,
+      post = "%"
+    )
+  )
+)
+
+helpText(
+  "The previous liberal rule was 0.5 mm / 20%; ",
+  "the previous conservative rule was 0.4 mm / 10%."
+)
+
+observeEvent(input$fd_cutoff, {
+  updateSliderInput(
+    session,
+    "pct_cutoff",
+    value = if (identical(input$fd_cutoff, "0.4")) 10 else 20
+  )
+}, ignoreInit = TRUE)
+```
+
+# Data preparation
+
+```{r load-and-prepare, include=FALSE}
+project_dir <- Sys.getenv("MIND_PROJECT_DIR", unset = NA_character_)
+if (is.na(project_dir) || !dir.exists(project_dir)) {
+  stop(
+    "The MiND project directory is not set. Launch this document using ",
+    "'Run Motion Corrected Analysis Interactive.R'."
+  )
+}
+project_dir <- normalizePath(project_dir, mustWork = TRUE)
+motion_dir <- file.path(project_dir, "Data", "Motion")
+
+master_data_part1 <- readr::read_csv(
+  file.path(motion_dir, "CombinedMasterGLX_new_part1.csv"),
+  num_threads = 1,
+  show_col_types = FALSE
+)
+master_data_part2 <- readr::read_csv(
+  file.path(motion_dir, "CombinedMasterGLX_new_part2.csv"),
+  num_threads = 1,
+  show_col_types = FALSE
+)
+
+motion_files <- c(
+  "0.5" = "motion_exclusion_by_run_5mm.csv",
+  "0.4" = "motion_exclusion_by_run_4mm.csv"
+)
+motion_exclusions <- lapply(motion_files, function(filename) {
+  readr::read_csv(
+    file.path(motion_dir, filename),
+    num_threads = 1,
+    show_col_types = FALSE
+  )
+})
+
+df_mind <- master_data_part2 %>%
+  select(
+    Subject,
+    D_aud_sm_sm2000_MC_P, D_vis_sm_sm2000_MC_P, D_mot_sm_sm2000_MC_P,
+    W_aud_sm_sm2000_MC_P, W_vis_sm_sm2000_MC_P, W_mot_sm_sm2000_MC_P,
+    B_aud_sm_sm2000_MC_P, B_vis_sm_sm2000_MC_P, B_mot_sm_sm2000_MC_P
+  ) %>%
+  rename(
+    AudDistinctiveness = D_aud_sm_sm2000_MC_P,
+    MotDistinctiveness = D_mot_sm_sm2000_MC_P,
+    VisDistinctiveness = D_vis_sm_sm2000_MC_P,
+    AudReliability = W_aud_sm_sm2000_MC_P,
+    MotReliability = W_mot_sm_sm2000_MC_P,
+    VisReliability = W_vis_sm_sm2000_MC_P,
+    AudConfusability = B_aud_sm_sm2000_MC_P,
+    MotConfusability = B_mot_sm_sm2000_MC_P,
+    VisConfusability = B_vis_sm_sm2000_MC_P
+  ) %>%
+  filter(!is.na(Subject))
+
+df_mind_mc04 <- master_data_part2 %>%
+  select(
+    Subject,
+    D_aud_sm_sm2000_MC04_P, D_vis_sm_sm2000_MC04_P, D_mot_sm_sm2000_MC04_P,
+    W_aud_sm_sm2000_MC04_P, W_vis_sm_sm2000_MC04_P, W_mot_sm_sm2000_MC04_P,
+    B_aud_sm_sm2000_MC04_P, B_vis_sm_sm2000_MC04_P, B_mot_sm_sm2000_MC04_P
+  ) %>%
+  rename(
+    AudDistinctiveness = D_aud_sm_sm2000_MC04_P,
+    MotDistinctiveness = D_mot_sm_sm2000_MC04_P,
+    VisDistinctiveness = D_vis_sm_sm2000_MC04_P,
+    AudReliability = W_aud_sm_sm2000_MC04_P,
+    MotReliability = W_mot_sm_sm2000_MC04_P,
+    VisReliability = W_vis_sm_sm2000_MC04_P,
+    AudConfusability = B_aud_sm_sm2000_MC04_P,
+    MotConfusability = B_mot_sm_sm2000_MC04_P,
+    VisConfusability = B_vis_sm_sm2000_MC04_P
+  ) %>%
+  filter(!is.na(Subject))
+
+df_mind_demo <- master_data_part1 %>%
+  select(
+    Subject, SubNum, Age_DuringParticipation_, Subgroup, Wave_Num,
+    Sex_M1, Education
+  )
+
+prepare_outcome_data <- function(data) {
+  data %>%
+    left_join(df_mind_demo, by = "Subject") %>%
+    filter(!is.na(SubNum)) %>%
+    pivot_longer(
+      cols = matches("^(Aud|Mot|Vis)(Distinctiveness|Reliability|Confusability)$"),
+      names_to = c("Modality", ".value"),
+      names_pattern = "(Aud|Mot|Vis)(.*)"
+    ) %>%
+    mutate(Modality = factor(Modality, levels = c("Aud", "Mot", "Vis")))
+}
+
+df_mind_long <- prepare_outcome_data(df_mind)
+df_mind_long_mc04 <- prepare_outcome_data(df_mind_mc04)
+
+outcome_data <- list(
+  "0.5" = df_mind_long,
+  "0.4" = df_mind_long_mc04
+)
+
+healthy_subject_ids <- bind_rows(df_mind_long, df_mind_long_mc04) %>%
+  filter(Subgroup == 1) %>%
+  distinct(Subject) %>%
+  pull(Subject)
+```
+
+```{r reactive-analysis, include=FALSE}
+selected_flags <- reactive({
+  req(input$fd_cutoff, input$pct_cutoff)
+
+  motion_exclusions[[input$fd_cutoff]] %>%
+    filter(
+      subject %in% healthy_subject_ids,
+      session == "placebo",
+      run == "001",
+      experiment %in% c("auditory", "visual", "motor")
+    ) %>%
+    transmute(
+      Subject = subject,
+      Modality = recode(
+        experiment,
+        auditory = "Aud",
+        motor = "Mot",
+        visual = "Vis"
+      ),
+      pct_excluded,
+      exclude = pct_excluded >= input$pct_cutoff
+    )
+})
+
+motion_filtered_data <- reactive({
+  req(input$fd_cutoff)
+
+  outcome_data[[input$fd_cutoff]] %>%
+    left_join(selected_flags(), by = c("Subject", "Modality")) %>%
+    # Match the non-interactive report: rows without a motion record are dropped.
+    filter(!exclude) %>%
+    filter(Wave_Num %in% c(1, 2, 3))
+})
+
+add_age_decomposition <- function(data) {
+  data %>%
+    group_by(SubNum) %>%
+    mutate(
+      n_waves = n_distinct(Wave_Num),
+      mean_age = if_else(
+        n_waves > 1,
+        mean(Age_DuringParticipation_, na.rm = TRUE),
+        Age_DuringParticipation_
+      ),
+      within_cAge = if_else(
+        n_waves > 1,
+        Age_DuringParticipation_ - mean_age,
+        0
+      ),
+      between_cAge = mean_age - 65,
+      aud_mot = case_when(
+        Modality == "Aud" ~ -1,
+        Modality == "Mot" ~ 1,
+        TRUE ~ 0
+      ),
+      aud_vis = case_when(
+        Modality == "Aud" ~ -1,
+        Modality == "Vis" ~ 1,
+        TRUE ~ 0
+      )
+    ) %>%
+    ungroup()
+}
+
+analysis_data <- reactive({
+  motion_filtered_data() %>%
+    filter(Subgroup == 1, Wave_Num %in% c(1, 2)) %>%
+    add_age_decomposition()
+})
+
+fit_model <- function(data, outcome) {
+  model_data <- data %>%
+    drop_na(
+      all_of(c(
+        outcome, "within_cAge", "between_cAge", "Sex_M1", "Education",
+        "aud_mot", "aud_vis", "SubNum"
+      ))
+    )
+
+  validate(need(
+    nrow(model_data) > 0,
+    paste("No complete observations are available for", outcome)
+  ))
+
+  lmer(
+    reformulate(
+      c(
+        "within_cAge", "between_cAge", "Sex_M1", "Education",
+        "aud_mot", "aud_vis", "(1 | SubNum)"
+      ),
+      response = outcome
+    ),
+    data = model_data,
+    REML = FALSE
+  )
+}
+
+models <- reactive({
+  data <- analysis_data()
+  setNames(
+    lapply(
+      c("Reliability", "Confusability", "Distinctiveness"),
+      function(outcome) fit_model(data, outcome)
+    ),
+    c("Reliability", "Confusability", "Distinctiveness")
+  )
+})
+
+rule_label <- reactive({
+  paste0(
+    "FD ≥ ", input$fd_cutoff, " mm; run excluded at ≥ ",
+    input$pct_cutoff, "% excluded TRs"
+  )
+})
+```
+
+# Sample after exclusion
+
+```{r sample-summary}
+renderTable({
+  flags <- selected_flags()
+  kept <- analysis_data()
+
+  tibble(
+    `Selected rule` = rule_label(),
+    `Runs flagged` = sum(flags$exclude, na.rm = TRUE),
+    `Runs assessed` = nrow(flags),
+    `Unique scans retained` = n_distinct(kept$Subject),
+    `Unique participants retained` = n_distinct(kept$SubNum),
+    `Modality-level observations retained` = nrow(kept)
+  )
+}, striped = TRUE, bordered = TRUE, spacing = "s")
+```
+
+# APA-style demographics and descriptive statistics
+
+These tables use the currently selected motion-exclusion rule. The
+cross-sectional sample is defined as Wave 1. The longitudinal sample requires
+retained observations at both Waves 1 and 2; Wave 1 demographics are reported
+so each longitudinal participant is counted once. Young adults are below age
+65 and older adults are age 65 or above. In Table 2, longitudinal descriptive
+statistics average each participant's two retained waves within modality
+before calculating the group mean and standard deviation.
+
+```{r apa-table-data, include=FALSE}
+crosssec_data <- reactive({
+  analysis_data() %>%
+    filter(Wave_Num == 1) %>%
+    mutate(
+      Age_Group = factor(
+        if_else(
+          Age_DuringParticipation_ < 65,
+          "Young adults",
+          "Older adults"
+        ),
+        levels = c("Young adults", "Older adults")
+      )
+    )
+})
+
+demographics_summary <- reactive({
+  crosssec_participants <- crosssec_data() %>%
+    distinct(SubNum, .keep_all = TRUE) %>%
+    mutate(Sample = "Cross-sectional")
+
+  longitudinal_ids <- analysis_data() %>%
+    distinct(SubNum, Wave_Num) %>%
+    count(SubNum, name = "n_retained_waves") %>%
+    filter(n_retained_waves >= 2) %>%
+    pull(SubNum)
+
+  longitudinal_participants <- crosssec_data() %>%
+    filter(SubNum %in% longitudinal_ids) %>%
+    distinct(SubNum, .keep_all = TRUE) %>%
+    mutate(Sample = "Longitudinal")
+
+  bind_rows(crosssec_participants, longitudinal_participants) %>%
+    mutate(
+      Sample = factor(
+        Sample,
+        levels = c("Cross-sectional", "Longitudinal")
+      )
+    ) %>%
+    group_by(Sample, Age_Group) %>%
+    summarise(
+      n = n(),
+      Age_M = mean(Age_DuringParticipation_, na.rm = TRUE),
+      Age_SD = sd(Age_DuringParticipation_, na.rm = TRUE),
+      Education_M = mean(Education, na.rm = TRUE),
+      Education_SD = sd(Education, na.rm = TRUE),
+      Male_n = sum(Sex_M1 == 1, na.rm = TRUE),
+      Female_n = sum(Sex_M1 == 2, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      `Age, M (SD)` = sprintf("%.2f (%.2f)", Age_M, Age_SD),
+      `Education, M (SD)` = sprintf(
+        "%.2f (%.2f)",
+        Education_M,
+        Education_SD
+      ),
+      `Male, n (%)` = sprintf("%d (%.1f%%)", Male_n, 100 * Male_n / n),
+      `Female, n (%)` = sprintf(
+        "%d (%.1f%%)",
+        Female_n,
+        100 * Female_n / n
+      )
+    ) %>%
+    select(
+      Sample,
+      `Age group` = Age_Group,
+      N = n,
+      `Age, M (SD)`,
+      `Education, M (SD)`,
+      `Male, n (%)`,
+      `Female, n (%)`
+    )
+})
+
+descriptives_summary <- reactive({
+  crosssec_descriptives <- crosssec_data() %>%
+    group_by(SubNum, Age_Group, Modality) %>%
+    summarise(
+      Reliability = mean(Reliability, na.rm = TRUE),
+      Confusability = mean(Confusability, na.rm = TRUE),
+      Distinctiveness = mean(Distinctiveness, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(Sample = "Cross-sectional")
+
+  baseline_age_groups <- crosssec_data() %>%
+    distinct(SubNum, Age_Group)
+
+  longitudinal_descriptives <- analysis_data() %>%
+    group_by(SubNum, Modality) %>%
+    filter(n_distinct(Wave_Num) >= 2) %>%
+    summarise(
+      Reliability = mean(Reliability, na.rm = TRUE),
+      Confusability = mean(Confusability, na.rm = TRUE),
+      Distinctiveness = mean(Distinctiveness, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    inner_join(baseline_age_groups, by = "SubNum") %>%
+    mutate(Sample = "Longitudinal")
+
+  bind_rows(crosssec_descriptives, longitudinal_descriptives) %>%
+    mutate(
+      Sample = factor(
+        Sample,
+        levels = c("Cross-sectional", "Longitudinal")
+      )
+    ) %>%
+    group_by(Sample, Age_Group, Modality) %>%
+    summarise(
+      Reliability_M = mean(Reliability, na.rm = TRUE),
+      Reliability_SD = sd(Reliability, na.rm = TRUE),
+      Confusability_M = mean(Confusability, na.rm = TRUE),
+      Confusability_SD = sd(Confusability, na.rm = TRUE),
+      Distinctiveness_M = mean(Distinctiveness, na.rm = TRUE),
+      Distinctiveness_SD = sd(Distinctiveness, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      Modality = recode(
+        as.character(Modality),
+        Aud = "Auditory",
+        Mot = "Motor",
+        Vis = "Visual"
+      )
+    ) %>%
+    arrange(
+      Sample,
+      Age_Group,
+      factor(Modality, levels = c("Auditory", "Motor", "Visual"))
+    )
+})
+
+style_apa_table <- function(ft) {
+  ft %>%
+    theme_booktabs() %>%
+    font(fontname = "Times New Roman", part = "all") %>%
+    fontsize(size = 11, part = "all") %>%
+    bold(part = "header") %>%
+    align(align = "center", part = "all") %>%
+    align(j = 1, align = "left", part = "all") %>%
+    padding(padding = 4, part = "all") %>%
+    autofit()
+}
+
+demographics_flextable <- reactive({
+  flextable(demographics_summary()) %>%
+    merge_v(j = "Sample") %>%
+    valign(j = "Sample", valign = "top") %>%
+    style_apa_table()
+})
+
+descriptives_flextable <- reactive({
+  flextable(descriptives_summary()) %>%
+    colformat_double(
+      j = c(
+        "Reliability_M", "Reliability_SD",
+        "Confusability_M", "Confusability_SD",
+        "Distinctiveness_M", "Distinctiveness_SD"
+      ),
+      digits = 3,
+      na_str = "\u2014"
+    ) %>%
+    set_header_labels(
+      Sample = "Sample",
+      Age_Group = "Age group",
+      Modality = "Modality",
+      Reliability_M = "M",
+      Reliability_SD = "SD",
+      Confusability_M = "M",
+      Confusability_SD = "SD",
+      Distinctiveness_M = "M",
+      Distinctiveness_SD = "SD"
+    ) %>%
+    add_header_row(
+      values = c(
+        "Sample", "Age group", "Modality", "Reliability",
+        "Confusability", "Distinctiveness"
+      ),
+      colwidths = c(1, 1, 1, 2, 2, 2)
+    ) %>%
+    merge_v(j = "Sample") %>%
+    merge_v(
+      j = c("Sample", "Age_Group"),
+      target = "Age_Group",
+      combine = TRUE
+    ) %>%
+    valign(
+      j = c("Sample", "Age_Group"),
+      valign = "top"
+    ) %>%
+    style_apa_table()
+})
+
+apa_table_html <- function(number, title, note, ft) {
+  htmltools::tagList(
+    htmltools::tags$p(
+      htmltools::tags$strong(number),
+      style = "font-family: 'Times New Roman'; margin-bottom: 0;"
+    ),
+    htmltools::tags$p(
+      htmltools::tags$em(title),
+      style = paste(
+        "font-family: 'Times New Roman';",
+        "font-size: 1.05em; margin-top: 0;"
+      )
+    ),
+    flextable::htmltools_value(ft),
+    htmltools::tags$p(
+      htmltools::tags$em("Note. "),
+      paste0(note, " Selected rule: ", rule_label(), "."),
+      style = paste(
+        "font-family: 'Times New Roman';",
+        "font-size: 0.95em; margin-top: 8px;"
+      )
+    )
+  )
+}
+```
+
+## Table 1
+
+```{r demographics-table}
+renderUI({
+  apa_table_html(
+    "Table 1",
+    "Cross-Sectional and Longitudinal Analysis Demographics Summary",
+    paste(
+      "Values are presented as M (SD) unless otherwise indicated.",
+      "The cross-sectional sample includes retained Wave 1 participants.",
+      "The longitudinal sample includes participants with retained",
+      "observations at Waves 1 and 2; their Wave 1 demographics are shown.",
+      "Participants may therefore appear in both samples."
+    ),
+    demographics_flextable()
+  )
+})
+
+downloadButton("download_demographics", "Download Table 1 (.docx)")
+
+output$download_demographics <- downloadHandler(
+  filename = function() "table1_demographics.docx",
+  content = function(file) {
+    flextable::save_as_docx(
+      "Table 1. Cross-Sectional and Longitudinal Demographics" =
+        demographics_flextable(),
+      path = file
+    )
+  }
+)
+```
+
+## Table 2
+
+```{r descriptives-table}
+renderUI({
+  apa_table_html(
+    "Table 2",
+    "Cross-Sectional and Longitudinal Analysis Descriptive Statistics",
+    paste(
+      "Values are means and standard deviations for reliability",
+      "(within-category similarity), confusability (between-category",
+      "similarity), and distinctiveness by sample, age group, and modality.",
+      "Longitudinal values are participant-level averages across two",
+      "retained waves within each modality."
+    ),
+    descriptives_flextable()
+  )
+})
+
+downloadButton("download_descriptives", "Download Table 2 (.docx)")
+
+output$download_descriptives <- downloadHandler(
+  filename = function() "table2_descriptive_statistics.docx",
+  content = function(file) {
+    flextable::save_as_docx(
+      "Table 2. Cross-Sectional and Longitudinal Descriptives" =
+        descriptives_flextable(),
+      path = file
+    )
+  }
+)
+```
+
+# Mixed-effects models
+
+The fixed-effects specification is unchanged from the original document:
+within-person age, between-person age, sex, education, and the two
+effect-coded modality contrasts, with a participant random intercept.
+
+```{r model-choice}
+selectInput(
+  "outcome",
+  "Outcome shown below",
+  choices = c("Reliability", "Confusability", "Distinctiveness"),
+  selected = "Reliability"
+)
+```
+
+## Model summary
+
+```{r model-summary}
+renderPrint({
+  cat(rule_label(), "\n\n")
+  print(summary(models()[[input$outcome]]))
+})
+```
+
+## Type III tests
+
+```{r model-anova}
+renderPrint({
+  cat(rule_label(), "\n\n")
+  print(car::Anova(models()[[input$outcome]], type = 3))
+})
+```
+
+# Interactive age-effect figure
+
+The combined figure contains auditory, motor, and visual ROI panels. The blue
+and red lines are the model-implied cross-sectional and longitudinal age
+effects from ROI-specific mixed-effects models adjusted for sex and education.
+Each panel reports the corresponding unstandardized coefficient (*B*),
+standardized coefficient (β), and *p* value.
+
+```{r plot-helper, include=FALSE}
+format_age_p <- function(p) {
+  if (is.na(p)) "NA" else if (p < 0.001) "< .001" else sprintf("%.3f", p)
+}
+
+get_roi_age_plot_info <- function(data, modality, outcome) {
+  plot_data <- data %>%
+    filter(Modality == modality) %>%
+    select(
+      Subject, SubNum, Wave_Num, Age_DuringParticipation_, n_waves,
+      mean_age, within_cAge, between_cAge, Sex_M1, Education,
+      Modality, all_of(outcome)
+    ) %>%
+    rename(value = all_of(outcome)) %>%
+    drop_na(
+      value, Age_DuringParticipation_, within_cAge, between_cAge,
+      Sex_M1, Education, SubNum
+    )
+
+  roi_model <- lmer(
+    reformulate(
+      c(
+        "within_cAge", "between_cAge", "Sex_M1", "Education",
+        "(1 | SubNum)"
+      ),
+      response = "value"
+    ),
+    data = plot_data,
+    REML = FALSE
+  )
+
+  coefficients <- summary(roi_model)$coefficients
+  outcome_sd <- sd(plot_data$value, na.rm = TRUE)
+  within_b <- coefficients["within_cAge", "Estimate"]
+  between_b <- coefficients["between_cAge", "Estimate"]
+  within_beta <- within_b * sd(plot_data$within_cAge, na.rm = TRUE) / outcome_sd
+  between_beta <- between_b * sd(plot_data$between_cAge, na.rm = TRUE) / outcome_sd
+  stats_label <- sprintf(
+    paste0(
+      "Long.: B=%.3f, β=%.3f, p=%s\n",
+      "Cross-sec.: B=%.3f, β=%.3f, p=%s"
+    ),
+    within_b,
+    within_beta,
+    format_age_p(coefficients["within_cAge", "Pr(>|t|)"]),
+    between_b,
+    between_beta,
+    format_age_p(coefficients["between_cAge", "Pr(>|t|)"])
+  )
+
+  longitudinal_data <- plot_data %>% filter(n_waves > 1)
+  typical_sex <- median(plot_data$Sex_M1, na.rm = TRUE)
+  typical_education <- median(plot_data$Education, na.rm = TRUE)
+
+  between_age <- seq(
+    min(plot_data$Age_DuringParticipation_, na.rm = TRUE),
+    max(plot_data$Age_DuringParticipation_, na.rm = TRUE),
+    length.out = 100
+  )
+  between_line <- tibble(
+    age = between_age,
+    within_cAge = 0,
+    between_cAge = between_age - 65,
+    Sex_M1 = typical_sex,
+    Education = typical_education,
+    SubNum = plot_data$SubNum[1]
+  ) %>%
+    mutate(predicted = predict(
+      roi_model, newdata = ., re.form = NA, allow.new.levels = TRUE
+    ))
+
+  if (nrow(longitudinal_data) > 0 &&
+      diff(range(longitudinal_data$within_cAge, na.rm = TRUE)) > 0) {
+    within_values <- seq(
+      min(longitudinal_data$within_cAge, na.rm = TRUE),
+      max(longitudinal_data$within_cAge, na.rm = TRUE),
+      length.out = 100
+    )
+    within_age <- mean(longitudinal_data$mean_age, na.rm = TRUE) +
+      within_values
+    within_line <- tibble(
+      age = within_age,
+      within_cAge = within_values,
+      between_cAge = 0,
+      Sex_M1 = typical_sex,
+      Education = typical_education,
+      SubNum = plot_data$SubNum[1]
+    ) %>%
+      mutate(predicted = predict(
+        roi_model, newdata = ., re.form = NA, allow.new.levels = TRUE
+      ))
+  } else {
+    within_line <- tibble(age = numeric(), predicted = numeric())
+  }
+
+  list(
+    data = plot_data,
+    longitudinal_data = longitudinal_data,
+    between_line = between_line,
+    within_line = within_line,
+    stats_label = stats_label
+  )
+}
+
+make_roi_age_panel <- function(data, modality, outcome, label) {
+  plot_info <- get_roi_age_plot_info(data, modality, outcome)
+  roi_labels <- c(Aud = "Auditory", Mot = "Motor", Vis = "Visual")
+
+  point_data <- plot_info$data
+
+  figure <- ggplot(point_data, aes(Age_DuringParticipation_, value)) +
+    geom_line(
+      data = plot_info$longitudinal_data %>% arrange(SubNum, Wave_Num),
+      aes(group = SubNum),
+      colour = "#CC0000", linewidth = 0.35, alpha = 0.45
+    ) +
+    geom_point(size = 1.25, alpha = 0.5) +
+    geom_line(
+      data = plot_info$between_line,
+      aes(age, predicted, colour = "Cross-sectional"),
+      linewidth = 1.4,
+      inherit.aes = FALSE
+    ) +
+    geom_line(
+      data = plot_info$within_line,
+      aes(age, predicted, colour = "Longitudinal"),
+      linewidth = 1.4,
+      inherit.aes = FALSE
+    ) +
+    scale_colour_manual(
+      values = c("Cross-sectional" = "#3366CC", "Longitudinal" = "#CC0000"),
+      name = NULL
+    ) +
+    labs(
+      title = unname(roi_labels[[modality]]),
+      subtitle = plot_info$stats_label,
+      x = "Age",
+      y = paste("Neural", tolower(outcome)),
+      caption = label
+    ) +
+    theme_classic(base_size = 10) +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 6.8, hjust = 0.5, lineheight = 1.1),
+      plot.caption = element_text(size = 8.5, hjust = 0.5),
+      axis.title = element_text(size = 9.5),
+      axis.text = element_text(size = 8.5),
+      legend.text = element_text(size = 8.5)
+    )
+
+  list(
+    figure = figure,
+    roi_label = unname(roi_labels[[modality]]),
+    stats_label = plot_info$stats_label
+  )
+}
+```
+
+```{r age-figure, fig.width=15, fig.height=5.2, out.width='100%'}
+renderPlot({
+  req(input$outcome)
+
+  modalities <- c("Aud", "Mot", "Vis")
+  panels <- lapply(
+    modalities,
+    function(modality) {
+      make_roi_age_panel(
+        analysis_data(),
+        modality,
+        input$outcome,
+        ""
+      )
+    }
+  )
+
+  wrap_plots(lapply(panels, `[[`, "figure"), nrow = 1) +
+    plot_layout(guides = "collect") +
+    plot_annotation(
+      title = paste(input$outcome, "age effects"),
+      subtitle = rule_label(),
+      theme = theme(
+        plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+        plot.subtitle = element_text(hjust = 0.5, size = 10)
+      )
+    ) &
+    theme(legend.position = "bottom")
+}, res = 110)
+```
+
+# Exploratory three-wave longitudinal analysis in MIND-C
+
+This deliberately underpowered analysis asks whether the within-person trend
+is also present in the MIND-C follow-up sample. Every included observation is
+restricted to cognitively healthy participants (`Subgroup == 1`). MIND-C is
+identified by the `mindc` Wave 3 subject ID, and matching Waves 1 and 2 are
+linked using `SubNum`. A participant-modality pair must have retained data at
+all three waves under the selected motion rule. The parsimonious exploratory
+models adjust for modality and include a participant random intercept; no
+multiplicity correction is applied.
+
+```{r mindc-analysis, include=FALSE}
+mindc_ids <- df_mind_long %>%
+  filter(
+    Subgroup == 1,
+    Wave_Num == 3,
+    stringr::str_starts(stringr::str_to_lower(Subject), "mindc")
+  ) %>%
+  distinct(SubNum) %>%
+  pull(SubNum)
+
+mindc_longitudinal_data <- reactive({
+  motion_filtered_data() %>%
+    filter(
+      SubNum %in% mindc_ids,
+      Subgroup == 1,
+      Wave_Num %in% c(1, 2, 3)
+    ) %>%
+    group_by(SubNum, Modality) %>%
+    filter(all(c(1, 2, 3) %in% Wave_Num)) %>%
+    ungroup() %>%
+    add_age_decomposition()
+})
+
+fit_mindc_model <- function(data, outcome) {
+  model_data <- data %>%
+    drop_na(
+      all_of(c(
+        outcome, "within_cAge", "aud_mot", "aud_vis", "SubNum"
+      ))
+    )
+
+  validate(need(
+    n_distinct(model_data$SubNum) >= 3,
+    paste(
+      "Fewer than three healthy MIND-C participants have complete",
+      "three-wave data",
+      "for", outcome, "under this motion rule."
+    )
+  ))
+
+  lmer(
+    reformulate(
+      c("within_cAge", "aud_mot", "aud_vis", "(1 | SubNum)"),
+      response = outcome
+    ),
+    data = model_data,
+    REML = FALSE
+  )
+}
+
+mindc_models <- reactive({
+  data <- mindc_longitudinal_data()
+  outcomes <- c("Reliability", "Confusability", "Distinctiveness")
+  setNames(
+    lapply(outcomes, function(outcome) {
+      fit_mindc_model(data, outcome)
+    }),
+    outcomes
+  )
+})
+
+mindc_longitudinal_effects <- reactive({
+  map_dfr(names(mindc_models()), function(outcome) {
+    model <- mindc_models()[[outcome]]
+    coefficient <- summary(model)$coefficients[
+      "within_cAge",
+      ,
+      drop = FALSE
+    ]
+    estimate <- coefficient[1, "Estimate"]
+    standard_error <- coefficient[1, "Std. Error"]
+    p_value <- coefficient[1, "Pr(>|t|)"]
+
+    tibble(
+      Outcome = outcome,
+      B = estimate,
+      SE = standard_error,
+      `95% CI lower` = estimate - 1.96 * standard_error,
+      `95% CI upper` = estimate + 1.96 * standard_error,
+      t = coefficient[1, "t value"],
+      df = coefficient[1, "df"],
+      p = p_value,
+      `Singular fit` = if_else(
+        lme4::isSingular(model),
+        "Yes",
+        "No"
+      )
+    )
+  })
+})
+```
+
+## Available exploratory sample
+
+```{r mindc-sample}
+renderTable({
+  data <- mindc_longitudinal_data()
+  tibble(
+    `Selected rule` = rule_label(),
+    `Three-wave participants` = n_distinct(data$SubNum),
+    `Complete three-wave participant-modality sets` =
+      n_distinct(interaction(data$SubNum, data$Modality)),
+    `Retained observations` = nrow(data)
+  )
+}, striped = TRUE, bordered = TRUE, spacing = "s")
+```
+
+## Estimated within-person age effects
+
+`B` is the estimated change in the neural measure per one-year increase in
+age. These estimates and *p* values should be treated as exploratory because
+the three-wave MIND-C sample is very small. A singular-fit indicator is
+included because the participant random-effect variance may not be estimable
+reliably in such a small sample.
+
+```{r mindc-effects-table}
+renderTable({
+  mindc_longitudinal_effects() %>%
+    mutate(
+      across(c(B, SE, `95% CI lower`, `95% CI upper`, t), ~ round(.x, 3)),
+      df = round(df, 1),
+      p = case_when(
+        p < .001 ~ "< .001",
+        TRUE ~ sprintf("%.3f", p)
+      )
+    )
+}, striped = TRUE, bordered = TRUE, spacing = "s")
+```
+
+## Exploratory model summary
+
+This display follows the outcome selected in the main outcome menu above.
+
+```{r mindc-model-summary}
+renderPrint({
+  cat("Exploratory healthy MIND-C three-wave longitudinal model\n")
+  cat(rule_label(), "\n")
+  cat("Outcome:", input$outcome, "\n\n")
+  print(summary(mindc_models()[[input$outcome]]))
+})
+```
+
+## Three-wave trajectories
+
+```{r mindc-trajectories, fig.width=13.5, fig.height=5.2, out.width='100%'}
+renderPlot({
+  plot_data <- mindc_longitudinal_data() %>%
+    select(
+      SubNum, Wave_Num, Age_DuringParticipation_, within_cAge, Modality,
+      all_of(input$outcome)
+    ) %>%
+    rename(value = all_of(input$outcome)) %>%
+    drop_na(value, Age_DuringParticipation_, within_cAge, SubNum)
+
+  validate(need(
+    nrow(plot_data) > 0,
+    "No complete three-wave observations are available for this outcome."
+  ))
+
+  trajectory_stats <- plot_data %>%
+    group_by(Modality) %>%
+    group_modify(~ {
+      modality_data <- .x
+      within_sd <- sd(modality_data$within_cAge, na.rm = TRUE)
+
+      if (n_distinct(modality_data$SubNum) < 3 ||
+          !is.finite(within_sd) || within_sd == 0) {
+        return(tibble(stats_label = "Longitudinal effect not estimable"))
+      }
+
+      tryCatch({
+        modality_model <- lmer(
+          value ~ within_cAge + (1 | SubNum),
+          data = modality_data,
+          REML = FALSE
+        )
+        coefficient <- summary(modality_model)$coefficients[
+          "within_cAge",
+          ,
+          drop = FALSE
+        ]
+        estimate <- coefficient[1, "Estimate"]
+        outcome_sd <- sd(modality_data$value, na.rm = TRUE)
+        standardized_estimate <- if (is.finite(outcome_sd) && outcome_sd > 0) {
+          estimate * within_sd / outcome_sd
+        } else {
+          NA_real_
+        }
+
+        tibble(
+          stats_label = sprintf(
+            "Longitudinal effect\nB = %.3f, β = %.3f\np = %s",
+            estimate,
+            standardized_estimate,
+            format_age_p(coefficient[1, "Pr(>|t|)"])
+          )
+        )
+      }, error = function(e) {
+        tibble(stats_label = "Longitudinal effect not estimable")
+      })
+    }) %>%
+    ungroup() %>%
+    mutate(
+      roi_label = recode(
+        as.character(Modality),
+        Aud = "Auditory",
+        Mot = "Motor",
+        Vis = "Visual"
+      )
+    )
+
+  available_modalities <- c("Aud", "Mot", "Vis")[
+    c("Aud", "Mot", "Vis") %in% as.character(unique(plot_data$Modality))
+  ]
+
+  roi_plots <- lapply(available_modalities, function(modality) {
+    modality_data <- plot_data %>%
+      filter(as.character(Modality) == modality)
+    modality_stats <- trajectory_stats %>%
+      filter(as.character(Modality) == modality)
+
+    ggplot(
+      modality_data,
+      aes(
+        x = Age_DuringParticipation_,
+        y = value,
+        group = SubNum
+      )
+    ) +
+      geom_line(colour = "#7A7A7A", linewidth = 0.55, alpha = 0.7) +
+      geom_point(aes(colour = factor(Wave_Num)), size = 2.5) +
+      scale_y_continuous(expand = expansion(mult = c(0.08, 0.08))) +
+      scale_colour_manual(
+        values = c(
+          "1" = "#3366CC",
+          "2" = "#E68A00",
+          "3" = "#CC0000"
+        ),
+        labels = c("Wave 1", "Wave 2", "Wave 3"),
+        name = NULL
+      ) +
+      labs(
+        title = modality_stats$roi_label[[1]],
+        subtitle = modality_stats$stats_label[[1]],
+        x = "Age",
+        y = paste("Neural", tolower(input$outcome))
+      ) +
+      theme_classic(base_size = 11) +
+      theme(
+        legend.position = "bottom",
+        plot.title = element_text(
+          face = "bold", size = 12, hjust = 0.5,
+          margin = margin(b = 4)
+        ),
+        plot.subtitle = element_text(
+          face = "plain", size = 8, hjust = 0.5, lineheight = 1.1,
+          margin = margin(b = 8)
+        ),
+        axis.title = element_text(size = 10),
+        axis.text = element_text(size = 9),
+        legend.text = element_text(size = 9)
+      )
+  })
+
+  trajectory_figure <- wrap_plots(roi_plots, nrow = 1) +
+    plot_layout(guides = "collect") +
+    plot_annotation(
+      title = paste(
+        "Exploratory healthy MIND-C three-wave trajectories:",
+        input$outcome
+      ),
+      subtitle = rule_label(),
+      theme = theme(
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(size = 9, hjust = 0.5)
+      )
+    ) &
+    theme(legend.position = "bottom")
+
+  trajectory_figure
+}, res = 110)
+```
+
+# Excluded runs
+
+```{r excluded-runs}
+renderTable({
+  selected_flags() %>%
+    filter(exclude) %>%
+    arrange(desc(pct_excluded), Subject, Modality) %>%
+    select(Subject, Modality, pct_excluded) %>%
+    rename(`Percent excluded TRs` = pct_excluded)
+}, striped = TRUE, bordered = TRUE, spacing = "s")
+```
