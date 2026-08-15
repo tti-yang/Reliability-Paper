@@ -12,7 +12,7 @@ runtime: shiny
 ```{r setup, include=FALSE}
 required_packages <- c(
   "shiny", "tidyverse", "lme4", "lmerTest", "car", "patchwork",
-  "flextable"
+  "flextable", "emmeans"
 )
 missing_packages <- required_packages[
   !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
@@ -30,6 +30,7 @@ library(lme4)
 library(lmerTest)
 library(patchwork)
 library(flextable)
+library(emmeans)
 
 knitr::opts_chunk$set(
   echo = FALSE,
@@ -360,6 +361,16 @@ format_p <- function(p) {
     if_else(p < .001, "< .001", sprintf("%.3f", p))
   )
 }
+
+# The analytic data for each manuscript rule is built once here and reused by
+# every static (non-reactive) section: exports, the interaction models, and the
+# manuscript figures.
+analysis_data_by_rule <- setNames(
+  lapply(MOTION_RULES, function(rule) {
+    build_analysis_data(rule$fd_cutoff, rule$pct_cutoff)
+  }),
+  vapply(MOTION_RULES, `[[`, character(1), "key")
+)
 ```
 
 ```{r reactive-analysis, include=FALSE}
@@ -766,6 +777,248 @@ renderPrint({
 })
 ```
 
+# Modality-specific age effects
+
+Each outcome is refit with the two age terms crossed with modality:
+
+```
+outcome ~ (between_cAge + within_cAge) * Modality +
+          Sex_M1 + Education + (1 | SubNum)
+```
+
+`Modality` enters as a factor (Auditory, Visual, Motor) rather than the manual
+`aud_mot` / `aud_vis` contrasts, and `contr.sum` is in effect for these fits so
+the Type III tests are valid. The joint interaction tests are the 2-df
+Satterthwaite *F* tests for `between_cAge:Modality` and `within_cAge:Modality`
+from `anova()`.
+
+Simple slopes are probed with `emmeans::emtrends()` on the interaction model —
+not with stratified per-modality models — and pairwise slope differences use
+Holm adjustment across the three modality pairs. All degrees of freedom are
+Satterthwaite.
+
+Everything is computed for both age terms and all three outcomes so the exports
+are complete. The `interaction_significant` column marks the joint *F* test at
+*p* < .05, which is the gate the manuscript's pre-registered rule uses: only a
+significant interaction is decomposed and interpreted.
+
+```{r interaction-models, include=FALSE}
+INTERACTION_MODALITY_LEVELS <- c("Auditory", "Visual", "Motor")
+INTERACTION_CONTRASTS <- c("contr.sum", "contr.poly")
+AGE_TERMS <- c("between_cAge", "within_cAge")
+
+prepare_interaction_data <- function(data) {
+  data %>%
+    mutate(
+      Modality = factor(
+        recode(
+          as.character(Modality),
+          Aud = "Auditory",
+          Vis = "Visual",
+          Mot = "Motor"
+        ),
+        levels = INTERACTION_MODALITY_LEVELS
+      )
+    )
+}
+
+fit_interaction_model <- function(data, outcome) {
+  # contr.sum is required for a valid Type III test of a factor that appears in
+  # an interaction; the previous setting is restored on exit so the main models
+  # and their manual numeric contrasts are untouched.
+  previous_contrasts <- options(contrasts = INTERACTION_CONTRASTS)
+  on.exit(options(previous_contrasts), add = TRUE)
+
+  model_data <- prepare_interaction_data(data) %>%
+    drop_na(all_of(c(
+      outcome, "between_cAge", "within_cAge", "Sex_M1", "Education", "SubNum"
+    )))
+
+  lmer(
+    reformulate(
+      c(
+        "(between_cAge + within_cAge) * Modality",
+        "Sex_M1", "Education", "(1 | SubNum)"
+      ),
+      response = outcome
+    ),
+    data = model_data,
+    REML = FALSE
+  )
+}
+
+fit_interaction_models <- function(data) {
+  setNames(
+    lapply(OUTCOMES, function(outcome) fit_interaction_model(data, outcome)),
+    OUTCOMES
+  )
+}
+
+interaction_tests_table <- function(interaction_models) {
+  map_dfr(OUTCOMES, function(outcome) {
+    # lmerTest's anova() is Type III with Satterthwaite denominator df.
+    anova_table <- anova(interaction_models[[outcome]])
+
+    map_dfr(AGE_TERMS, function(age_term) {
+      row <- paste0(age_term, ":Modality")
+      tibble(
+        outcome = outcome,
+        age_term = age_term,
+        F = anova_table[row, "F value"],
+        df1 = anova_table[row, "NumDF"],
+        df2 = anova_table[row, "DenDF"],
+        p = anova_table[row, "Pr(>F)"]
+      )
+    })
+  })
+}
+
+modality_trends <- function(model, age_term) {
+  # lmer.df is always passed explicitly so emmeans never falls back to
+  # Kenward-Roger for these models.
+  emmeans::emtrends(
+    model,
+    ~ Modality,
+    var = age_term,
+    lmer.df = "satterthwaite",
+    infer = c(TRUE, TRUE)
+  )
+}
+
+simple_slopes_table <- function(interaction_models, tests) {
+  gate <- tests %>%
+    transmute(outcome, age_term, interaction_significant = p < .05)
+
+  map_dfr(OUTCOMES, function(outcome) {
+    map_dfr(AGE_TERMS, function(age_term) {
+      summary(modality_trends(interaction_models[[outcome]], age_term)) %>%
+        as_tibble() %>%
+        transmute(
+          outcome = outcome,
+          age_term = age_term,
+          modality = as.character(Modality),
+          slope = .data[[paste0(age_term, ".trend")]],
+          SE,
+          df,
+          lower.CL,
+          upper.CL,
+          t = t.ratio,
+          p = p.value
+        )
+    })
+  }) %>%
+    left_join(gate, by = c("outcome", "age_term"))
+}
+
+slope_contrasts_table <- function(interaction_models) {
+  map_dfr(OUTCOMES, function(outcome) {
+    map_dfr(AGE_TERMS, function(age_term) {
+      trends <- modality_trends(interaction_models[[outcome]], age_term)
+      summary(pairs(trends, adjust = "holm")) %>%
+        as_tibble() %>%
+        transmute(
+          outcome = outcome,
+          age_term = age_term,
+          contrast = as.character(contrast),
+          estimate,
+          SE,
+          df,
+          t = t.ratio,
+          p_holm = p.value
+        )
+    })
+  })
+}
+
+compute_interaction_results <- function(data) {
+  interaction_models <- fit_interaction_models(data)
+  tests <- interaction_tests_table(interaction_models)
+
+  list(
+    models = interaction_models,
+    tests = tests,
+    slopes = simple_slopes_table(interaction_models, tests),
+    contrasts = slope_contrasts_table(interaction_models)
+  )
+}
+
+interaction_results_by_rule <- lapply(
+  analysis_data_by_rule,
+  compute_interaction_results
+)
+
+interaction_results <- reactive({
+  compute_interaction_results(analysis_data())
+})
+
+format_interaction_tests <- function(tests) {
+  tests %>%
+    transmute(
+      Outcome = outcome,
+      `Age term` = age_term,
+      F = sprintf("%.2f", F),
+      df1,
+      df2 = sprintf("%.1f", df2),
+      p = format_p(p),
+      `Interaction significant` = if_else(p < .05, "Yes", "No")
+    )
+}
+
+format_simple_slopes <- function(slopes) {
+  slopes %>%
+    transmute(
+      Outcome = outcome,
+      `Age term` = age_term,
+      Modality = modality,
+      Slope = sprintf("%.5f", slope),
+      SE = sprintf("%.5f", SE),
+      df = sprintf("%.1f", df),
+      `95% CI` = sprintf("[%.5f, %.5f]", lower.CL, upper.CL),
+      t = sprintf("%.2f", t),
+      p = format_p(p),
+      `Interaction significant` = if_else(interaction_significant, "Yes", "No")
+    )
+}
+
+format_slope_contrasts <- function(contrasts) {
+  contrasts %>%
+    transmute(
+      Outcome = outcome,
+      `Age term` = age_term,
+      Contrast = contrast,
+      Estimate = sprintf("%.5f", estimate),
+      SE = sprintf("%.5f", SE),
+      df = sprintf("%.1f", df),
+      t = sprintf("%.2f", t),
+      `p (Holm)` = format_p(p_holm)
+    )
+}
+```
+
+## Joint interaction tests
+
+```{r interaction-tests-table}
+renderTable({
+  format_interaction_tests(interaction_results()$tests)
+}, striped = TRUE, bordered = TRUE, spacing = "s")
+```
+
+## Simple slopes by modality
+
+```{r interaction-slopes-table}
+renderTable({
+  format_simple_slopes(interaction_results()$slopes)
+}, striped = TRUE, bordered = TRUE, spacing = "s")
+```
+
+## Pairwise slope differences (Holm)
+
+```{r interaction-contrasts-table}
+renderTable({
+  format_slope_contrasts(interaction_results()$contrasts)
+}, striped = TRUE, bordered = TRUE, spacing = "s")
+```
+
 # Outlier sensitivity (MAD x 3)
 
 Outliers are flagged with a median absolute deviation criterion applied to each
@@ -898,14 +1151,14 @@ format_outlier_sensitivity <- function(table) {
     )
 }
 
-outlier_sensitivity_by_rule <- lapply(MOTION_RULES, function(rule) {
-  outlier_sensitivity_table(
-    build_analysis_data(rule$fd_cutoff, rule$pct_cutoff),
-    rule$label
-  )
-})
-names(outlier_sensitivity_by_rule) <- vapply(
-  MOTION_RULES, `[[`, character(1), "key"
+outlier_sensitivity_by_rule <- setNames(
+  lapply(MOTION_RULES, function(rule) {
+    outlier_sensitivity_table(
+      analysis_data_by_rule[[rule$key]],
+      rule$label
+    )
+  }),
+  vapply(MOTION_RULES, `[[`, character(1), "key")
 )
 ```
 
@@ -1090,7 +1343,7 @@ motion_accounting_export <- function() {
 
 model_estimates_export <- function() {
   map_dfr(MOTION_RULES, function(rule) {
-    data <- build_analysis_data(rule$fd_cutoff, rule$pct_cutoff)
+    data <- analysis_data_by_rule[[rule$key]]
     outcome_models <- fit_outcome_models(data)
 
     map_dfr(OUTCOMES, function(outcome) {
@@ -1117,11 +1370,19 @@ model_estimates_export <- function() {
 
 export_tables <- list()
 for (rule in MOTION_RULES) {
-  rule_data <- build_analysis_data(rule$fd_cutoff, rule$pct_cutoff)
+  rule_data <- analysis_data_by_rule[[rule$key]]
+  rule_interaction <- interaction_results_by_rule[[rule$key]]
+
   export_tables[[paste0(rule$prefix, "_demographics.csv")]] <-
     demographics_export(rule_data, rule$label)
   export_tables[[paste0(rule$prefix, "_descriptives.csv")]] <-
     descriptives_export(rule_data, rule$label)
+  export_tables[[paste0(rule$prefix, "_interaction_tests.csv")]] <-
+    rule_interaction$tests %>% mutate(motion_rule = rule$label, .before = 1)
+  export_tables[[paste0(rule$prefix, "_simple_slopes.csv")]] <-
+    rule_interaction$slopes %>% mutate(motion_rule = rule$label, .before = 1)
+  export_tables[[paste0(rule$prefix, "_slope_contrasts.csv")]] <-
+    rule_interaction$contrasts %>% mutate(motion_rule = rule$label, .before = 1)
 }
 export_tables[["motion_accounting.csv"]] <- motion_accounting_export()
 export_tables[["model_estimates.csv"]] <- model_estimates_export()
@@ -1148,6 +1409,503 @@ renderTable({
     File = file.path("output", names(export_tables)),
     Rows = vapply(export_tables, nrow, integer(1)),
     Columns = vapply(export_tables, ncol, integer(1))
+  )
+}, striped = TRUE, bordered = TRUE, spacing = "s")
+```
+
+# Manuscript figures
+
+Figures 2 and 3 are static, publication-ready files built from the primary
+motion rule; the same figures under the liberal rule are written to
+`output/figures/supplement/` so they can be used as supplementary figures
+without re-running anything. This section does not depend on the Shiny
+controls.
+
+Figure 2A shows the pooled between-person age effect for each outcome from the
+main (no-interaction) model, with a 95% CI ribbon for the fixed-effect
+prediction. Points are participant-level values averaged across modalities and
+waves, so each participant appears once — session x modality points are
+unreadable once pooled. Figure 2B shows the same effect resolved by modality,
+using the slopes implied by the interaction model, so the lines correspond
+exactly to the emmeans simple slopes reported above; there the points are the
+individual session x modality observations.
+
+Figure 3 has the same two-part structure for the within-person effect, on an
+x-axis of years since each participant's own first retained wave rather than
+chronological age, so every trajectory starts at zero. Only returning
+participants appear. 3A is the pooled within-person slope from the main model
+with a 95% CI ribbon, over session-level values averaged across modalities;
+3B resolves it by modality using the interaction model, matching the emmeans
+`within_cAge` simple slopes. The 3B ribbons overlap heavily across modalities,
+which is the honest display of a within-person x modality interaction that is
+non-significant for all three outcomes.
+
+Titles, subtitles, and in-panel statistics are deliberately absent: panel
+identity comes from the tags and strip labels, and the statistics belong in
+Table 3 and the manuscript text.
+
+```{r manuscript-figure-helpers, include=FALSE}
+# Okabe-Ito blue and vermillion, used for between-person (cross-sectional) and
+# within-person (longitudinal) effects respectively.
+BETWEEN_COLOUR <- "#0072B2"
+WITHIN_COLOUR <- "#D55E00"
+POINT_COLOUR <- "grey35"
+
+# Wrapped onto two lines: a rotated one-line title is taller than a Figure 2B
+# row and overruns the neighbouring panel.
+OUTCOME_AXIS_LABELS <- c(
+  Reliability = "Neural\nreliability",
+  Confusability = "Neural\nconfusability",
+  Distinctiveness = "Neural\ndistinctiveness"
+)
+
+FIGURE_WIDTH_MM <- 180
+GRID_POINTS <- 100
+
+manuscript_theme <- function(base_size = 11) {
+  theme_classic(base_size = base_size) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text = element_text(colour = "black"),
+      axis.title = element_text(colour = "black"),
+      axis.line = element_line(colour = "black", linewidth = 0.35),
+      axis.ticks = element_line(colour = "black", linewidth = 0.35),
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold", size = rel(0.95)),
+      legend.position = "bottom",
+      legend.title = element_blank(),
+      legend.key.height = unit(8, "pt"),
+      plot.title = element_blank(),
+      plot.subtitle = element_blank(),
+      plot.tag = element_text(face = "bold", size = rel(1.15)),
+      plot.margin = margin(4, 6, 4, 4)
+    )
+}
+
+# predict.merMod gives no standard errors, so the fixed-effect prediction and
+# its Wald CI are computed from the design matrix and the fixed-effect vcov.
+# `contrasts_option` must match the contrasts the model was fitted under.
+fixed_effect_predictions <- function(model, newdata, contrasts_option = NULL) {
+  if (!is.null(contrasts_option)) {
+    previous_contrasts <- options(contrasts = contrasts_option)
+    on.exit(options(previous_contrasts), add = TRUE)
+  }
+
+  design <- model.matrix(
+    delete.response(terms(model, fixed.only = TRUE)),
+    data = newdata
+  )
+  design <- design[, names(fixef(model)), drop = FALSE]
+
+  fitted_values <- as.vector(design %*% fixef(model))
+  standard_errors <- sqrt(
+    rowSums((design %*% as.matrix(vcov(model))) * design)
+  )
+  critical_value <- qnorm(0.975)
+
+  newdata %>%
+    mutate(
+      predicted = fitted_values,
+      se = standard_errors,
+      conf_low = fitted_values - critical_value * standard_errors,
+      conf_high = fitted_values + critical_value * standard_errors
+    )
+}
+
+complete_outcome_data <- function(data, outcome) {
+  data %>% drop_na(all_of(c(outcome, MODEL_TERMS, "SubNum")))
+}
+
+# Figure 2A: pooled between-person effect for one outcome.
+build_pooled_between_panel <- function(data, model, outcome, show_x_title) {
+  panel_data <- complete_outcome_data(data, outcome)
+
+  participant_points <- panel_data %>%
+    group_by(SubNum) %>%
+    summarise(
+      age = mean(Age_DuringParticipation_, na.rm = TRUE),
+      value = mean(.data[[outcome]], na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  age_grid <- seq(
+    min(panel_data$Age_DuringParticipation_, na.rm = TRUE),
+    max(panel_data$Age_DuringParticipation_, na.rm = TRUE),
+    length.out = GRID_POINTS
+  )
+  prediction_grid <- tibble(
+    age = age_grid,
+    between_cAge = age_grid - OLDER_ADULT_AGE,
+    within_cAge = 0,
+    Sex_M1 = median(panel_data$Sex_M1, na.rm = TRUE),
+    Education = median(panel_data$Education, na.rm = TRUE),
+    # Effect-coded contrasts at zero: the average of the three modalities.
+    aud_mot = 0,
+    aud_vis = 0
+  )
+  effect_line <- fixed_effect_predictions(model, prediction_grid)
+
+  ggplot() +
+    geom_point(
+      data = participant_points,
+      aes(age, value),
+      size = 0.8, alpha = 0.3, colour = POINT_COLOUR
+    ) +
+    geom_ribbon(
+      data = effect_line,
+      aes(age, ymin = conf_low, ymax = conf_high),
+      fill = BETWEEN_COLOUR, alpha = 0.25
+    ) +
+    geom_line(
+      data = effect_line,
+      aes(age, predicted),
+      colour = BETWEEN_COLOUR, linewidth = 0.8
+    ) +
+    labs(
+      x = if (show_x_title) "Age (years)" else NULL,
+      y = unname(OUTCOME_AXIS_LABELS[[outcome]])
+    ) +
+    manuscript_theme()
+}
+
+# Figure 2B: between-person effect resolved by modality, from the interaction
+# model, so the lines match the emmeans simple slopes.
+build_modality_between_panel <- function(data, interaction_model, outcome,
+                                         show_x_title) {
+  panel_data <- prepare_interaction_data(complete_outcome_data(data, outcome))
+
+  prediction_grid <- panel_data %>%
+    group_by(Modality) %>%
+    group_modify(~ tibble(
+      age = seq(
+        min(.x$Age_DuringParticipation_, na.rm = TRUE),
+        max(.x$Age_DuringParticipation_, na.rm = TRUE),
+        length.out = GRID_POINTS
+      )
+    )) %>%
+    ungroup() %>%
+    mutate(
+      between_cAge = age - OLDER_ADULT_AGE,
+      within_cAge = 0,
+      Sex_M1 = median(panel_data$Sex_M1, na.rm = TRUE),
+      Education = median(panel_data$Education, na.rm = TRUE)
+    )
+  effect_lines <- fixed_effect_predictions(
+    interaction_model,
+    prediction_grid,
+    contrasts_option = INTERACTION_CONTRASTS
+  )
+
+  ggplot() +
+    geom_point(
+      data = panel_data,
+      aes(Age_DuringParticipation_, .data[[outcome]]),
+      size = 0.55, alpha = 0.28, colour = POINT_COLOUR
+    ) +
+    geom_ribbon(
+      data = effect_lines,
+      aes(age, ymin = conf_low, ymax = conf_high),
+      fill = BETWEEN_COLOUR, alpha = 0.25
+    ) +
+    geom_line(
+      data = effect_lines,
+      aes(age, predicted),
+      colour = BETWEEN_COLOUR, linewidth = 0.8
+    ) +
+    facet_wrap(~ Modality, nrow = 1) +
+    labs(
+      x = if (show_x_title) "Age (years)" else NULL,
+      y = unname(OUTCOME_AXIS_LABELS[[outcome]])
+    ) +
+    manuscript_theme()
+}
+
+# Figure 3 uses time since each participant's own first retained wave rather
+# than chronological age, so the two-wave segments are aligned at zero. The
+# model line is drawn in the same coordinate: within_cAge is centred on each
+# participant's mean age, so shifting it by the mean of
+# (years_from_first - within_cAge) puts the fitted slope on the plotted axis
+# without changing the slope itself.
+WITHIN_TIME_LABEL <- "Years from first wave"
+
+within_time_offset <- function(data) {
+  mean(data$years_from_first - data$within_cAge, na.rm = TRUE)
+}
+
+within_prediction_grid <- function(data) {
+  offset <- within_time_offset(data)
+  within_range <- range(data$within_cAge, na.rm = TRUE) + offset
+
+  # within_cAge is centred within participant, so its observed range maps onto
+  # negative follow-up time for the longest intervals. The line is clipped to
+  # the observed follow-up window; being a straight line, its slope and CI are
+  # unaffected by where it is truncated.
+  time_range <- c(
+    max(0, within_range[1]),
+    min(max(data$years_from_first, na.rm = TRUE), within_range[2])
+  )
+
+  tibble(
+    years_from_first = seq(
+      time_range[1], time_range[2], length.out = GRID_POINTS
+    )
+  ) %>%
+    mutate(within_cAge = years_from_first - offset)
+}
+
+# Figure 3A: pooled within-person effect for one outcome. One line per
+# returning participant, averaged across modalities within each session.
+build_pooled_within_panel <- function(data, model, outcome, show_x_title) {
+  panel_data <- complete_outcome_data(data, outcome)
+
+  session_points <- panel_data %>%
+    group_by(SubNum, Wave_Num) %>%
+    summarise(
+      age = mean(Age_DuringParticipation_, na.rm = TRUE),
+      within_cAge = mean(within_cAge, na.rm = TRUE),
+      value = mean(.data[[outcome]], na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    group_by(SubNum) %>%
+    filter(n() >= 2) %>%
+    mutate(years_from_first = age - min(age, na.rm = TRUE)) %>%
+    ungroup()
+
+  prediction_grid <- within_prediction_grid(session_points) %>%
+    mutate(
+      between_cAge = 0,
+      Sex_M1 = median(panel_data$Sex_M1, na.rm = TRUE),
+      Education = median(panel_data$Education, na.rm = TRUE),
+      aud_mot = 0,
+      aud_vis = 0
+    )
+  effect_line <- fixed_effect_predictions(model, prediction_grid)
+
+  ggplot() +
+    geom_line(
+      data = session_points %>% arrange(SubNum, Wave_Num),
+      aes(years_from_first, value, group = SubNum),
+      colour = POINT_COLOUR, linewidth = 0.3, alpha = 0.45
+    ) +
+    geom_point(
+      data = session_points,
+      aes(years_from_first, value),
+      size = 0.7, alpha = 0.35, colour = POINT_COLOUR
+    ) +
+    geom_ribbon(
+      data = effect_line,
+      aes(years_from_first, ymin = conf_low, ymax = conf_high),
+      fill = WITHIN_COLOUR, alpha = 0.25
+    ) +
+    geom_line(
+      data = effect_line,
+      aes(years_from_first, predicted),
+      colour = WITHIN_COLOUR, linewidth = 0.9
+    ) +
+    labs(
+      x = if (show_x_title) WITHIN_TIME_LABEL else NULL,
+      y = unname(OUTCOME_AXIS_LABELS[[outcome]])
+    ) +
+    manuscript_theme()
+}
+
+# Figure 3B: within-person effect resolved by modality, using the interaction
+# model so the lines match the emmeans within_cAge simple slopes. The ribbons
+# are wide and overlapping because these interactions are non-significant.
+build_modality_within_panel <- function(data, interaction_model, outcome,
+                                        show_x_title) {
+  panel_data <- prepare_interaction_data(complete_outcome_data(data, outcome))
+
+  longitudinal_data <- panel_data %>%
+    group_by(SubNum, Modality) %>%
+    filter(n_distinct(Wave_Num) >= 2) %>%
+    mutate(
+      years_from_first = Age_DuringParticipation_ -
+        min(Age_DuringParticipation_, na.rm = TRUE)
+    ) %>%
+    ungroup()
+
+  prediction_grid <- longitudinal_data %>%
+    group_by(Modality) %>%
+    group_modify(~ within_prediction_grid(.x)) %>%
+    ungroup() %>%
+    mutate(
+      between_cAge = 0,
+      Sex_M1 = median(panel_data$Sex_M1, na.rm = TRUE),
+      Education = median(panel_data$Education, na.rm = TRUE)
+    )
+  effect_lines <- fixed_effect_predictions(
+    interaction_model,
+    prediction_grid,
+    contrasts_option = INTERACTION_CONTRASTS
+  )
+
+  ggplot() +
+    geom_line(
+      data = longitudinal_data %>% arrange(SubNum, Wave_Num),
+      aes(years_from_first, .data[[outcome]], group = SubNum),
+      colour = POINT_COLOUR, linewidth = 0.3, alpha = 0.45
+    ) +
+    geom_point(
+      data = longitudinal_data,
+      aes(years_from_first, .data[[outcome]]),
+      size = 0.6, alpha = 0.35, colour = POINT_COLOUR
+    ) +
+    geom_ribbon(
+      data = effect_lines,
+      aes(years_from_first, ymin = conf_low, ymax = conf_high),
+      fill = WITHIN_COLOUR, alpha = 0.25
+    ) +
+    geom_line(
+      data = effect_lines,
+      aes(years_from_first, predicted),
+      colour = WITHIN_COLOUR, linewidth = 0.8
+    ) +
+    facet_wrap(~ Modality, nrow = 1) +
+    labs(
+      x = if (show_x_title) WITHIN_TIME_LABEL else NULL,
+      y = unname(OUTCOME_AXIS_LABELS[[outcome]])
+    ) +
+    manuscript_theme()
+}
+
+build_figure2 <- function(data, models, interaction_models) {
+  panel_a <- wrap_plots(
+    lapply(OUTCOMES, function(outcome) {
+      build_pooled_between_panel(data, models[[outcome]], outcome, TRUE)
+    }),
+    nrow = 1
+  )
+
+  panel_b <- wrap_plots(
+    lapply(seq_along(OUTCOMES), function(index) {
+      outcome <- OUTCOMES[[index]]
+      build_modality_between_panel(
+        data,
+        interaction_models[[outcome]],
+        outcome,
+        show_x_title = index == length(OUTCOMES)
+      )
+    }),
+    ncol = 1
+  )
+
+  wrap_elements(panel_a) / wrap_elements(panel_b) +
+    plot_layout(heights = c(1, 2.7)) +
+    plot_annotation(
+      tag_levels = "A",
+      theme = theme(plot.tag = element_text(face = "bold", size = 13))
+    )
+}
+
+build_figure3 <- function(data, models, interaction_models) {
+  panel_a <- wrap_plots(
+    lapply(OUTCOMES, function(outcome) {
+      build_pooled_within_panel(data, models[[outcome]], outcome, TRUE)
+    }),
+    nrow = 1
+  )
+
+  panel_b <- wrap_plots(
+    lapply(seq_along(OUTCOMES), function(index) {
+      outcome <- OUTCOMES[[index]]
+      build_modality_within_panel(
+        data,
+        interaction_models[[outcome]],
+        outcome,
+        show_x_title = index == length(OUTCOMES)
+      )
+    }),
+    ncol = 1
+  )
+
+  wrap_elements(panel_a) / wrap_elements(panel_b) +
+    plot_layout(heights = c(1, 2.7)) +
+    plot_annotation(
+      tag_levels = "A",
+      theme = theme(plot.tag = element_text(face = "bold", size = 13))
+    )
+}
+
+save_manuscript_figure <- function(figure, directory, name, height_mm) {
+  dir.create(directory, showWarnings = FALSE, recursive = TRUE)
+
+  ggsave(
+    file.path(directory, paste0(name, ".pdf")),
+    figure,
+    width = FIGURE_WIDTH_MM, height = height_mm, units = "mm"
+  )
+  ggsave(
+    file.path(directory, paste0(name, ".png")),
+    figure,
+    width = FIGURE_WIDTH_MM, height = height_mm, units = "mm", dpi = 600
+  )
+
+  file.path(directory, paste0(name, c(".pdf", ".png")))
+}
+```
+
+```{r manuscript-figures, include=FALSE}
+FIGURE2_HEIGHT_MM <- 160
+FIGURE3_HEIGHT_MM <- 160
+
+figure_dir <- file.path(output_dir, "figures")
+supplement_figure_dir <- file.path(figure_dir, "supplement")
+
+manuscript_figures <- lapply(MOTION_RULES, function(rule) {
+  rule_data <- analysis_data_by_rule[[rule$key]]
+  rule_models <- fit_outcome_models(rule_data)
+  rule_interaction_models <- interaction_results_by_rule[[rule$key]]$models
+
+  list(
+    figure2 = build_figure2(rule_data, rule_models, rule_interaction_models),
+    figure3 = build_figure3(
+      rule_data, rule_models, rule_interaction_models
+    )
+  )
+})
+names(manuscript_figures) <- vapply(
+  MOTION_RULES, `[[`, character(1), "key"
+)
+
+saved_figure_files <- c(
+  save_manuscript_figure(
+    manuscript_figures$primary$figure2, figure_dir, "figure2",
+    FIGURE2_HEIGHT_MM
+  ),
+  save_manuscript_figure(
+    manuscript_figures$primary$figure3, figure_dir, "figure3",
+    FIGURE3_HEIGHT_MM
+  ),
+  save_manuscript_figure(
+    manuscript_figures$liberal$figure2, supplement_figure_dir, "figure2",
+    FIGURE2_HEIGHT_MM
+  ),
+  save_manuscript_figure(
+    manuscript_figures$liberal$figure3, supplement_figure_dir, "figure3",
+    FIGURE3_HEIGHT_MM
+  )
+)
+```
+
+## Figure 2 (primary motion rule)
+
+```{r figure2-display, fig.width=7.09, fig.height=6.3, out.width='100%'}
+manuscript_figures$primary$figure2
+```
+
+## Figure 3 (primary motion rule)
+
+```{r figure3-display, fig.width=7.09, fig.height=6.3, out.width='100%'}
+manuscript_figures$primary$figure3
+```
+
+```{r figure-files}
+renderTable({
+  tibble(
+    File = sub(
+      paste0("^", project_dir, .Platform$file.sep), "", saved_figure_files
+    )
   )
 }, striped = TRUE, bordered = TRUE, spacing = "s")
 ```
