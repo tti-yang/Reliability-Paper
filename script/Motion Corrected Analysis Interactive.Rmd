@@ -11,7 +11,7 @@ runtime: shiny
 
 ```{r setup, include=FALSE}
 required_packages <- c(
-  "shiny", "tidyverse", "lme4", "lmerTest", "car", "patchwork",
+  "shiny", "tidyverse", "lme4", "lmerTest", "patchwork",
   "flextable", "emmeans"
 )
 missing_packages <- required_packages[
@@ -770,10 +770,17 @@ renderPrint({
 
 ## Type III tests
 
+Fixed effects are tested with Satterthwaite-approximated denominator degrees of
+freedom, consistent with the interaction tests below.
+
 ```{r model-anova}
 renderPrint({
   cat(rule_label(), "\n\n")
-  print(car::Anova(models()[[input$outcome]], type = 3))
+  print(stats::anova(
+    models()[[input$outcome]],
+    type = 3,
+    ddf = "Satterthwaite"
+  ))
 })
 ```
 
