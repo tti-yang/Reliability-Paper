@@ -1,0 +1,5 @@
+motion_rule,sample,n,age_m,age_sd,age_min,age_max,education_m,education_sd,n_men,n_women
+FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",60,22.766666666666666,2.9536915521615894,18,29,15.35,1.5603671884245276,31,29
+FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",166,70.51807228915662,4.992992533864583,65,87,16.795180722891565,2.1700944604190133,62,104
+FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",60,74.35,5.426941580232297,68,94,16.7,2.188568141154069,24,36
+FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",60,70.33333333333333,5.160694561934655,65,87,16.7,2.188568141154069,24,36

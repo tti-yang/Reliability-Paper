@@ -51,7 +51,9 @@ knitr::opts_chunk$set(
 
 Choose the framewise-displacement (FD) cutoff and the percentage of excluded
 TRs that causes a run to be removed. The models, sample summary, and plots
-below update automatically.
+below update automatically. The exported CSVs are always written for both
+manuscript rules (FD 0.4 mm / 10% and FD 0.5 mm / 20%) regardless of the
+selection here.
 
 ```{r controls}
 fluidRow(
@@ -61,7 +63,7 @@ fluidRow(
       "fd_cutoff",
       "FD cutoff",
       choices = c("0.5 mm" = "0.5", "0.4 mm" = "0.4"),
-      selected = "0.5"
+      selected = "0.4"
     )
   ),
   column(
@@ -71,7 +73,7 @@ fluidRow(
       "Exclude a run when percentage of excluded TRs is at least:",
       min = 0,
       max = 100,
-      value = 20,
+      value = 10,
       step = 1,
       post = "%"
     )
@@ -79,8 +81,7 @@ fluidRow(
 )
 
 helpText(
-  "The previous liberal rule was 0.5 mm / 20%; ",
-  "the previous conservative rule was 0.4 mm / 10%."
+  "The primary rule is 0.4 mm / 10%; the liberal rule is 0.5 mm / 20%."
 )
 
 observeEvent(input$fd_cutoff, {
@@ -94,117 +95,133 @@ observeEvent(input$fd_cutoff, {
 
 # Data preparation
 
-```{r load-and-prepare, include=FALSE}
-project_dir <- Sys.getenv("MIND_PROJECT_DIR", unset = NA_character_)
-if (is.na(project_dir) || !dir.exists(project_dir)) {
+Only Waves 1 and 2 are analysed. Wave 3 (MIND-C) rows are dropped from the
+prepared data before anything else happens, so the motion-exclusion accounting,
+the demographics, and the models all describe the same Waves 1--2 sample.
+
+```{r locate-data, include=FALSE}
+# The document reads the prepared outcome files and the run-level motion
+# summaries. Set MIND_DATA_DIR (or MIND_PROJECT_DIR, whose "data" subdirectory
+# is used) to override the search; otherwise the repository's data/ directory is
+# found relative to the working directory, which is the script/ folder when the
+# document is launched with runtime: shiny.
+required_data_files <- c(
+  "df_mind_all.csv",
+  "df_mind_all_mc04.csv",
+  "motion_exclusion_by_run_5mm.csv",
+  "motion_exclusion_by_run_4mm.csv"
+)
+
+candidate_data_dirs <- c(
+  Sys.getenv("MIND_DATA_DIR", unset = ""),
+  file.path(Sys.getenv("MIND_PROJECT_DIR", unset = ""), "data"),
+  file.path(Sys.getenv("MIND_PROJECT_DIR", unset = ""), "Data", "Motion"),
+  "data",
+  file.path("..", "data"),
+  file.path("..", "..", "data")
+)
+candidate_data_dirs <- candidate_data_dirs[nzchar(candidate_data_dirs)]
+
+has_required_files <- function(path) {
+  dir.exists(path) &&
+    all(file.exists(file.path(path, required_data_files)))
+}
+
+data_dir <- candidate_data_dirs[vapply(
+  candidate_data_dirs, has_required_files, logical(1)
+)]
+if (length(data_dir) == 0) {
   stop(
-    "The MiND project directory is not set. Launch this document using ",
-    "'Run Motion Corrected Analysis Interactive.R'."
+    "Could not find the MiND data directory. Set MIND_DATA_DIR to the folder ",
+    "containing ", paste(required_data_files, collapse = ", "), "."
   )
 }
-project_dir <- normalizePath(project_dir, mustWork = TRUE)
-motion_dir <- file.path(project_dir, "Data", "Motion")
+data_dir <- normalizePath(data_dir[[1]], mustWork = TRUE)
+project_dir <- normalizePath(file.path(data_dir, ".."), mustWork = TRUE)
+output_dir <- file.path(project_dir, "output")
+```
 
-master_data_part1 <- readr::read_csv(
-  file.path(motion_dir, "CombinedMasterGLX_new_part1.csv"),
-  num_threads = 1,
-  show_col_types = FALSE
+```{r load-and-prepare, include=FALSE}
+# Waves 1 and 2 only. The exploratory three-wave MIND-C analysis has been
+# removed from the manuscript and its supplement, so Wave 3 never enters the
+# pipeline.
+ANALYSIS_WAVES <- c(1, 2)
+OUTCOMES <- c("Reliability", "Confusability", "Distinctiveness")
+MODEL_TERMS <- c(
+  "within_cAge", "between_cAge", "Sex_M1", "Education",
+  "aud_mot", "aud_vis"
 )
-master_data_part2 <- readr::read_csv(
-  file.path(motion_dir, "CombinedMasterGLX_new_part2.csv"),
-  num_threads = 1,
-  show_col_types = FALSE
-)
+OLDER_ADULT_AGE <- 65
+MAD_THRESHOLD <- 3
 
+# The prepared outcome files hold the 2,000-vertex motion-corrected measures:
+# df_mind_all.csv is the FD 0.5 mm scrubbing pipeline and df_mind_all_mc04.csv
+# the FD 0.4 mm pipeline. Each is keyed to the matching run-level motion file.
+outcome_files <- c(
+  "0.5" = "df_mind_all.csv",
+  "0.4" = "df_mind_all_mc04.csv"
+)
 motion_files <- c(
   "0.5" = "motion_exclusion_by_run_5mm.csv",
   "0.4" = "motion_exclusion_by_run_4mm.csv"
 )
-motion_exclusions <- lapply(motion_files, function(filename) {
+
+read_data_file <- function(filename) {
   readr::read_csv(
-    file.path(motion_dir, filename),
+    file.path(data_dir, filename),
     num_threads = 1,
     show_col_types = FALSE
   )
-})
-
-df_mind <- master_data_part2 %>%
-  select(
-    Subject,
-    D_aud_sm_sm2000_MC_P, D_vis_sm_sm2000_MC_P, D_mot_sm_sm2000_MC_P,
-    W_aud_sm_sm2000_MC_P, W_vis_sm_sm2000_MC_P, W_mot_sm_sm2000_MC_P,
-    B_aud_sm_sm2000_MC_P, B_vis_sm_sm2000_MC_P, B_mot_sm_sm2000_MC_P
-  ) %>%
-  rename(
-    AudDistinctiveness = D_aud_sm_sm2000_MC_P,
-    MotDistinctiveness = D_mot_sm_sm2000_MC_P,
-    VisDistinctiveness = D_vis_sm_sm2000_MC_P,
-    AudReliability = W_aud_sm_sm2000_MC_P,
-    MotReliability = W_mot_sm_sm2000_MC_P,
-    VisReliability = W_vis_sm_sm2000_MC_P,
-    AudConfusability = B_aud_sm_sm2000_MC_P,
-    MotConfusability = B_mot_sm_sm2000_MC_P,
-    VisConfusability = B_vis_sm_sm2000_MC_P
-  ) %>%
-  filter(!is.na(Subject))
-
-df_mind_mc04 <- master_data_part2 %>%
-  select(
-    Subject,
-    D_aud_sm_sm2000_MC04_P, D_vis_sm_sm2000_MC04_P, D_mot_sm_sm2000_MC04_P,
-    W_aud_sm_sm2000_MC04_P, W_vis_sm_sm2000_MC04_P, W_mot_sm_sm2000_MC04_P,
-    B_aud_sm_sm2000_MC04_P, B_vis_sm_sm2000_MC04_P, B_mot_sm_sm2000_MC04_P
-  ) %>%
-  rename(
-    AudDistinctiveness = D_aud_sm_sm2000_MC04_P,
-    MotDistinctiveness = D_mot_sm_sm2000_MC04_P,
-    VisDistinctiveness = D_vis_sm_sm2000_MC04_P,
-    AudReliability = W_aud_sm_sm2000_MC04_P,
-    MotReliability = W_mot_sm_sm2000_MC04_P,
-    VisReliability = W_vis_sm_sm2000_MC04_P,
-    AudConfusability = B_aud_sm_sm2000_MC04_P,
-    MotConfusability = B_mot_sm_sm2000_MC04_P,
-    VisConfusability = B_vis_sm_sm2000_MC04_P
-  ) %>%
-  filter(!is.na(Subject))
-
-df_mind_demo <- master_data_part1 %>%
-  select(
-    Subject, SubNum, Age_DuringParticipation_, Subgroup, Wave_Num,
-    Sex_M1, Education
-  )
+}
 
 prepare_outcome_data <- function(data) {
   data %>%
-    left_join(df_mind_demo, by = "Subject") %>%
     filter(!is.na(SubNum)) %>%
     pivot_longer(
       cols = matches("^(Aud|Mot|Vis)(Distinctiveness|Reliability|Confusability)$"),
       names_to = c("Modality", ".value"),
       names_pattern = "(Aud|Mot|Vis)(.*)"
     ) %>%
-    mutate(Modality = factor(Modality, levels = c("Aud", "Mot", "Vis")))
+    mutate(Modality = factor(Modality, levels = c("Aud", "Mot", "Vis"))) %>%
+    # Wave 3 is dropped here, i.e. before the motion-exclusion accounting, so
+    # the run counts reported in the manuscript are Waves 1-2 only.
+    filter(Wave_Num %in% ANALYSIS_WAVES)
 }
 
-df_mind_long <- prepare_outcome_data(df_mind)
-df_mind_long_mc04 <- prepare_outcome_data(df_mind_mc04)
+outcome_data <- lapply(outcome_files, function(filename) {
+  prepare_outcome_data(read_data_file(filename))
+})
 
-outcome_data <- list(
-  "0.5" = df_mind_long,
-  "0.4" = df_mind_long_mc04
-)
+motion_exclusions <- lapply(motion_files, read_data_file)
 
-healthy_subject_ids <- bind_rows(df_mind_long, df_mind_long_mc04) %>%
+healthy_subject_ids <- bind_rows(outcome_data) %>%
   filter(Subgroup == 1) %>%
   distinct(Subject) %>%
   pull(Subject)
+
+subject_age_groups <- bind_rows(outcome_data) %>%
+  filter(Subgroup == 1) %>%
+  distinct(Subject, Age_DuringParticipation_) %>%
+  transmute(
+    Subject,
+    Age_Group = factor(
+      if_else(
+        Age_DuringParticipation_ < OLDER_ADULT_AGE,
+        "Young adults",
+        "Older adults"
+      ),
+      levels = c("Young adults", "Older adults")
+    )
+  ) %>%
+  distinct(Subject, Age_Group)
 ```
 
-```{r reactive-analysis, include=FALSE}
-selected_flags <- reactive({
-  req(input$fd_cutoff, input$pct_cutoff)
+```{r analysis-pipeline, include=FALSE}
+# Everything below is written as plain functions of (fd_cutoff, pct_cutoff) so
+# the reactive display and the CSV export can share one implementation.
 
-  motion_exclusions[[input$fd_cutoff]] %>%
+build_run_flags <- function(fd_cutoff, pct_cutoff) {
+  motion_exclusions[[fd_cutoff]] %>%
     filter(
       subject %in% healthy_subject_ids,
       session == "placebo",
@@ -220,19 +237,34 @@ selected_flags <- reactive({
         visual = "Vis"
       ),
       pct_excluded,
-      exclude = pct_excluded >= input$pct_cutoff
+      exclude = pct_excluded >= pct_cutoff
     )
-})
+}
 
-motion_filtered_data <- reactive({
-  req(input$fd_cutoff)
+build_joined_data <- function(fd_cutoff, pct_cutoff) {
+  outcome_data[[fd_cutoff]] %>%
+    left_join(
+      build_run_flags(fd_cutoff, pct_cutoff),
+      by = c("Subject", "Modality")
+    )
+}
 
-  outcome_data[[input$fd_cutoff]] %>%
-    left_join(selected_flags(), by = c("Subject", "Modality")) %>%
-    # Match the non-interactive report: rows without a motion record are dropped.
-    filter(!exclude) %>%
-    filter(Wave_Num %in% c(1, 2, 3))
-})
+build_motion_filtered_data <- function(fd_cutoff, pct_cutoff) {
+  build_joined_data(fd_cutoff, pct_cutoff) %>%
+    # Intended behaviour, confirmed against the reported sample sizes: a
+    # session x modality with NO run-level motion record is DROPPED, not
+    # retained. `!exclude` already drops NA, but the NA test is written out so
+    # the intent is explicit and is not mistaken for the earlier
+    # `is.na(exclude) | !exclude` behaviour, which kept unassessed rows. See
+    # "Missing motion records" below for how many rows this affects.
+    filter(!is.na(exclude), !exclude)
+}
+
+count_missing_motion_records <- function(fd_cutoff, pct_cutoff) {
+  build_joined_data(fd_cutoff, pct_cutoff) %>%
+    filter(Subgroup == 1, is.na(exclude)) %>%
+    nrow()
+}
 
 add_age_decomposition <- function(data) {
   data %>%
@@ -249,7 +281,7 @@ add_age_decomposition <- function(data) {
         Age_DuringParticipation_ - mean_age,
         0
       ),
-      between_cAge = mean_age - 65,
+      between_cAge = mean_age - OLDER_ADULT_AGE,
       aud_mot = case_when(
         Modality == "Aud" ~ -1,
         Modality == "Mot" ~ 1,
@@ -264,32 +296,23 @@ add_age_decomposition <- function(data) {
     ungroup()
 }
 
-analysis_data <- reactive({
-  motion_filtered_data() %>%
-    filter(Subgroup == 1, Wave_Num %in% c(1, 2)) %>%
+build_analysis_data <- function(fd_cutoff, pct_cutoff) {
+  build_motion_filtered_data(fd_cutoff, pct_cutoff) %>%
+    filter(Subgroup == 1, Wave_Num %in% ANALYSIS_WAVES) %>%
     add_age_decomposition()
-})
+}
 
 fit_model <- function(data, outcome) {
   model_data <- data %>%
-    drop_na(
-      all_of(c(
-        outcome, "within_cAge", "between_cAge", "Sex_M1", "Education",
-        "aud_mot", "aud_vis", "SubNum"
-      ))
-    )
+    drop_na(all_of(c(outcome, MODEL_TERMS, "SubNum")))
 
-  validate(need(
-    nrow(model_data) > 0,
-    paste("No complete observations are available for", outcome)
-  ))
+  if (nrow(model_data) == 0) {
+    stop("No complete observations are available for ", outcome)
+  }
 
   lmer(
     reformulate(
-      c(
-        "within_cAge", "between_cAge", "Sex_M1", "Education",
-        "aud_mot", "aud_vis", "(1 | SubNum)"
-      ),
+      c(MODEL_TERMS, "(1 | SubNum)"),
       response = outcome
     ),
     data = model_data,
@@ -297,22 +320,71 @@ fit_model <- function(data, outcome) {
   )
 }
 
-models <- reactive({
-  data <- analysis_data()
+fit_outcome_models <- function(data) {
   setNames(
-    lapply(
-      c("Reliability", "Confusability", "Distinctiveness"),
-      function(outcome) fit_model(data, outcome)
-    ),
-    c("Reliability", "Confusability", "Distinctiveness")
+    lapply(OUTCOMES, function(outcome) fit_model(data, outcome)),
+    OUTCOMES
   )
+}
+
+rule_text <- function(fd_cutoff, pct_cutoff) {
+  paste0(
+    "FD ≥ ", fd_cutoff, " mm; run excluded at ≥ ",
+    pct_cutoff, "% excluded TRs"
+  )
+}
+
+# The two rules the manuscript reports. `prefix` is used for rule-specific
+# export filenames.
+MOTION_RULES <- list(
+  list(
+    key = "primary",
+    fd_cutoff = "0.4",
+    pct_cutoff = 10,
+    label = "FD 0.4 mm / 10% (primary)",
+    prefix = "fd04_pct10"
+  ),
+  list(
+    key = "liberal",
+    fd_cutoff = "0.5",
+    pct_cutoff = 20,
+    label = "FD 0.5 mm / 20% (liberal)",
+    prefix = "fd05_pct20"
+  )
+)
+
+format_p <- function(p) {
+  if_else(
+    is.na(p),
+    NA_character_,
+    if_else(p < .001, "< .001", sprintf("%.3f", p))
+  )
+}
+```
+
+```{r reactive-analysis, include=FALSE}
+selected_flags <- reactive({
+  req(input$fd_cutoff, input$pct_cutoff)
+  build_run_flags(input$fd_cutoff, input$pct_cutoff)
+})
+
+analysis_data <- reactive({
+  req(input$fd_cutoff, input$pct_cutoff)
+  build_analysis_data(input$fd_cutoff, input$pct_cutoff)
+})
+
+missing_motion_records <- reactive({
+  req(input$fd_cutoff, input$pct_cutoff)
+  count_missing_motion_records(input$fd_cutoff, input$pct_cutoff)
+})
+
+models <- reactive({
+  fit_outcome_models(analysis_data())
 })
 
 rule_label <- reactive({
-  paste0(
-    "FD ≥ ", input$fd_cutoff, " mm; run excluded at ≥ ",
-    input$pct_cutoff, "% excluded TRs"
-  )
+  req(input$fd_cutoff, input$pct_cutoff)
+  rule_text(input$fd_cutoff, input$pct_cutoff)
 })
 ```
 
@@ -325,12 +397,45 @@ renderTable({
 
   tibble(
     `Selected rule` = rule_label(),
-    `Runs flagged` = sum(flags$exclude, na.rm = TRUE),
     `Runs assessed` = nrow(flags),
+    `Runs flagged` = sum(flags$exclude, na.rm = TRUE),
+    `Runs flagged (%)` = sprintf(
+      "%.1f%%",
+      100 * mean(flags$exclude, na.rm = TRUE)
+    ),
     `Unique scans retained` = n_distinct(kept$Subject),
     `Unique participants retained` = n_distinct(kept$SubNum),
-    `Modality-level observations retained` = nrow(kept)
+    `Modality-level observations retained` = nrow(kept),
+    `Rows dropped for a missing motion record` = missing_motion_records()
   )
+}, striped = TRUE, bordered = TRUE, spacing = "s")
+```
+
+## Missing motion records
+
+`filter(!exclude)` drops any session x modality that has no run-level motion
+record at all, because such a row was never assessed for motion. This is the
+intended behaviour: it reproduces the sample sizes reported in the manuscript
+(724 observations under the primary rule, 841 under the liberal rule). The
+earlier `filter(is.na(exclude) | !exclude)` retained unassessed rows and gives
+larger samples (808 and 925 respectively). The count below is the number of
+healthy Waves 1--2 rows removed for a *missing* record rather than for an
+actual motion exclusion; it does not depend on the FD or percentage cutoff and
+should be described in the manuscript.
+
+```{r missing-motion-records}
+renderTable({
+  bind_rows(lapply(MOTION_RULES, function(rule) {
+    joined <- build_joined_data(rule$fd_cutoff, rule$pct_cutoff) %>%
+      filter(Subgroup == 1)
+    tibble(
+      `Motion rule` = rule$label,
+      `Healthy Waves 1-2 rows before motion filtering` = nrow(joined),
+      `Rows with no motion record` = sum(is.na(joined$exclude)),
+      `Rows excluded for motion` = sum(joined$exclude, na.rm = TRUE),
+      `Rows retained` = sum(!is.na(joined$exclude) & !joined$exclude)
+    )
+  }))
 }, striped = TRUE, bordered = TRUE, spacing = "s")
 ```
 
@@ -351,7 +456,7 @@ crosssec_data <- reactive({
     mutate(
       Age_Group = factor(
         if_else(
-          Age_DuringParticipation_ < 65,
+          Age_DuringParticipation_ < OLDER_ADULT_AGE,
           "Young adults",
           "Older adults"
         ),
@@ -505,7 +610,7 @@ descriptives_flextable <- reactive({
         "Distinctiveness_M", "Distinctiveness_SD"
       ),
       digits = 3,
-      na_str = "\u2014"
+      na_str = "—"
     ) %>%
     set_header_labels(
       Sample = "Sample",
@@ -661,6 +766,392 @@ renderPrint({
 })
 ```
 
+# Outlier sensitivity (MAD x 3)
+
+Outliers are flagged with a median absolute deviation criterion applied to each
+outcome **separately within each modality**, because the auditory, motor, and
+visual distributions differ enough that pooling them inflates the MAD and
+flags almost nothing. An observation is flagged when
+`abs(x - median(x)) > 3 * mad(x)`; R's `mad()` already applies the 1.4826
+consistency constant.
+
+Two exclusion variants are then compared with the full sample. A row is treated
+as flagged if it is an outlier on *any* of the three outcomes, so all three
+models are refit on the same subsample and the estimates stay comparable
+across outcomes.
+
+- **Drop flagged observations** removes only the flagged session x modality rows.
+- **Drop flagged participants** removes every row belonging to a participant
+  with at least one flagged observation.
+
+The model specification is unchanged: `outcome ~ within_cAge + between_cAge +
+Sex_M1 + Education + aud_mot + aud_vis + (1 | SubNum)`, `REML = FALSE`, with
+Satterthwaite *p* values from `lmerTest`.
+
+```{r outlier-sensitivity-helpers, include=FALSE}
+add_mad_outlier_flags <- function(data) {
+  data %>%
+    group_by(Modality) %>%
+    mutate(
+      across(
+        all_of(OUTCOMES),
+        ~ !is.na(.x) &
+          abs(.x - median(.x, na.rm = TRUE)) >
+            MAD_THRESHOLD * mad(.x, na.rm = TRUE),
+        .names = "outlier_{.col}"
+      )
+    ) %>%
+    ungroup() %>%
+    mutate(
+      outlier_any = if_any(starts_with("outlier_"))
+    )
+}
+
+mad_outlier_counts <- function(data) {
+  flagged <- add_mad_outlier_flags(data)
+
+  by_outcome <- map_dfr(OUTCOMES, function(outcome) {
+    indicator <- flagged[[paste0("outlier_", outcome)]]
+    tibble(
+      Outcome = outcome,
+      `Observations flagged` = sum(indicator),
+      `Observations flagged (%)` = 100 * mean(indicator),
+      `Participants affected` = n_distinct(flagged$SubNum[indicator])
+    )
+  })
+
+  bind_rows(
+    by_outcome,
+    tibble(
+      Outcome = "Any outcome",
+      `Observations flagged` = sum(flagged$outlier_any),
+      `Observations flagged (%)` = 100 * mean(flagged$outlier_any),
+      `Participants affected` =
+        n_distinct(flagged$SubNum[flagged$outlier_any])
+    )
+  )
+}
+
+build_outlier_variants <- function(data) {
+  flagged <- add_mad_outlier_flags(data)
+  affected_participants <- flagged %>%
+    filter(outlier_any) %>%
+    distinct(SubNum) %>%
+    pull(SubNum)
+
+  list(
+    `Full sample` = flagged,
+    `Drop flagged observations` = flagged %>% filter(!outlier_any),
+    `Drop flagged participants` = flagged %>%
+      filter(!SubNum %in% affected_participants)
+  )
+}
+
+outlier_sensitivity_table <- function(data, rule_label_text = NA_character_) {
+  variants <- build_outlier_variants(data)
+
+  map_dfr(OUTCOMES, function(outcome) {
+    map_dfr(names(variants), function(variant) {
+      model <- fit_model(variants[[variant]], outcome)
+      model_frame <- model@frame
+      coefficients <- summary(model)$coefficients
+
+      tibble(
+        `Motion rule` = rule_label_text,
+        Outcome = outcome,
+        `Exclusion variant` = variant,
+        `N observations` = nrow(model_frame),
+        `N participants` = n_distinct(model_frame$SubNum),
+        age_between_b = coefficients["between_cAge", "Estimate"],
+        age_between_SE = coefficients["between_cAge", "Std. Error"],
+        age_between_df = coefficients["between_cAge", "df"],
+        age_between_p = coefficients["between_cAge", "Pr(>|t|)"],
+        age_within_b = coefficients["within_cAge", "Estimate"],
+        age_within_SE = coefficients["within_cAge", "Std. Error"],
+        age_within_df = coefficients["within_cAge", "df"],
+        age_within_p = coefficients["within_cAge", "Pr(>|t|)"]
+      )
+    })
+  })
+}
+
+format_outlier_sensitivity <- function(table) {
+  table %>%
+    mutate(
+      across(
+        c(age_between_b, age_between_SE, age_within_b, age_within_SE),
+        ~ sprintf("%.5f", .x)
+      ),
+      across(c(age_between_df, age_within_df), ~ sprintf("%.1f", .x)),
+      across(c(age_between_p, age_within_p), format_p)
+    ) %>%
+    select(-any_of("Motion rule")) %>%
+    rename(
+      `age_between b` = age_between_b,
+      `age_between SE` = age_between_SE,
+      `age_between df` = age_between_df,
+      `age_between p` = age_between_p,
+      `age_within b` = age_within_b,
+      `age_within SE` = age_within_SE,
+      `age_within df` = age_within_df,
+      `age_within p` = age_within_p
+    )
+}
+
+outlier_sensitivity_by_rule <- lapply(MOTION_RULES, function(rule) {
+  outlier_sensitivity_table(
+    build_analysis_data(rule$fd_cutoff, rule$pct_cutoff),
+    rule$label
+  )
+})
+names(outlier_sensitivity_by_rule) <- vapply(
+  MOTION_RULES, `[[`, character(1), "key"
+)
+```
+
+## Flagged observations under the selected rule
+
+```{r outlier-counts}
+renderPrint({
+  data <- analysis_data()
+  counts <- mad_outlier_counts(data)
+  cat(rule_label(), "\n")
+  cat("Analytic observations:", nrow(data), "\n")
+  cat("Participants:", n_distinct(data$SubNum), "\n\n")
+  for (i in seq_len(nrow(counts))) {
+    cat(sprintf(
+      "%-16s %3d observations flagged (%.1f%%) across %d participants\n",
+      counts$Outcome[[i]],
+      counts$`Observations flagged`[[i]],
+      counts$`Observations flagged (%)`[[i]],
+      counts$`Participants affected`[[i]]
+    ))
+  }
+})
+```
+
+## Comparison table under the selected rule
+
+```{r outlier-sensitivity-table}
+renderTable({
+  format_outlier_sensitivity(outlier_sensitivity_table(analysis_data()))
+}, striped = TRUE, bordered = TRUE, spacing = "s")
+```
+
+## Comparison tables for both manuscript rules
+
+These two tables do not depend on the controls above; they are the numbers
+written to `outlier_sensitivity.csv`.
+
+```{r outlier-sensitivity-both-rules}
+renderUI({
+  htmltools::tagList(lapply(MOTION_RULES, function(rule) {
+    table <- outlier_sensitivity_by_rule[[rule$key]]
+    htmltools::tagList(
+      htmltools::tags$h4(rule$label),
+      htmltools::HTML(
+        knitr::kable(
+          format_outlier_sensitivity(table),
+          format = "html",
+          row.names = FALSE,
+          table.attr = "class='table table-striped table-bordered'"
+        )
+      )
+    )
+  }))
+})
+```
+
+# Exported numbers for the manuscript
+
+```{r exports, include=FALSE}
+sample_definitions <- function(data) {
+  returner_ids <- data %>%
+    distinct(SubNum, Wave_Num) %>%
+    count(SubNum, name = "n_retained_waves") %>%
+    filter(n_retained_waves >= 2) %>%
+    pull(SubNum)
+
+  young_wave1 <- data %>%
+    filter(Wave_Num == 1, Age_DuringParticipation_ < OLDER_ADULT_AGE)
+  older_wave1 <- data %>%
+    filter(Wave_Num == 1, Age_DuringParticipation_ >= OLDER_ADULT_AGE)
+
+  list(
+    `Young adults, Wave 1` = young_wave1,
+    `Older adults, Wave 1` = older_wave1,
+    `Older adults, Wave 2 (returners)` = data %>%
+      filter(
+        Wave_Num == 2,
+        Age_DuringParticipation_ >= OLDER_ADULT_AGE,
+        SubNum %in% returner_ids
+      ),
+    `Older adults, Wave 1 (Wave 2 returners)` = older_wave1 %>%
+      filter(SubNum %in% returner_ids)
+  )
+}
+
+demographics_export <- function(data, rule_label_text) {
+  samples <- sample_definitions(data)
+
+  map_dfr(names(samples), function(sample_name) {
+    participants <- samples[[sample_name]] %>%
+      distinct(SubNum, .keep_all = TRUE)
+
+    tibble(
+      motion_rule = rule_label_text,
+      sample = sample_name,
+      n = nrow(participants),
+      age_m = mean(participants$Age_DuringParticipation_, na.rm = TRUE),
+      age_sd = sd(participants$Age_DuringParticipation_, na.rm = TRUE),
+      age_min = min(participants$Age_DuringParticipation_, na.rm = TRUE),
+      age_max = max(participants$Age_DuringParticipation_, na.rm = TRUE),
+      education_m = mean(participants$Education, na.rm = TRUE),
+      education_sd = sd(participants$Education, na.rm = TRUE),
+      n_men = sum(participants$Sex_M1 == 1, na.rm = TRUE),
+      n_women = sum(participants$Sex_M1 == 2, na.rm = TRUE)
+    )
+  })
+}
+
+descriptives_export <- function(data, rule_label_text) {
+  samples <- sample_definitions(data)
+
+  map_dfr(names(samples), function(sample_name) {
+    samples[[sample_name]] %>%
+      mutate(
+        modality = recode(
+          as.character(Modality),
+          Aud = "Auditory",
+          Mot = "Motor",
+          Vis = "Visual"
+        )
+      ) %>%
+      group_by(modality) %>%
+      summarise(
+        n = sum(!is.na(Reliability)),
+        reliability_m = mean(Reliability, na.rm = TRUE),
+        reliability_sd = sd(Reliability, na.rm = TRUE),
+        confusability_m = mean(Confusability, na.rm = TRUE),
+        confusability_sd = sd(Confusability, na.rm = TRUE),
+        distinctiveness_m = mean(Distinctiveness, na.rm = TRUE),
+        distinctiveness_sd = sd(Distinctiveness, na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      mutate(
+        motion_rule = rule_label_text,
+        sample = sample_name,
+        .before = 1
+      )
+  })
+}
+
+motion_accounting_export <- function() {
+  map_dfr(MOTION_RULES, function(rule) {
+    flags <- build_run_flags(rule$fd_cutoff, rule$pct_cutoff) %>%
+      left_join(subject_age_groups, by = "Subject") %>%
+      mutate(
+        age_group = as.character(Age_Group),
+        modality = recode(
+          as.character(Modality),
+          Aud = "Auditory",
+          Mot = "Motor",
+          Vis = "Visual"
+        )
+      )
+
+    summarise_flags <- function(grouped) {
+      grouped %>%
+        summarise(
+          runs_assessed = n(),
+          runs_excluded = sum(exclude, na.rm = TRUE),
+          pct_runs_excluded = 100 * mean(exclude, na.rm = TRUE),
+          mean_pct_volumes_scrubbed = mean(pct_excluded, na.rm = TRUE),
+          .groups = "drop"
+        )
+    }
+
+    bind_rows(
+      summarise_flags(flags %>% group_by(age_group, modality)),
+      summarise_flags(flags %>% group_by(age_group)) %>%
+        mutate(modality = "All modalities"),
+      summarise_flags(flags %>% group_by(modality)) %>%
+        mutate(age_group = "All participants"),
+      summarise_flags(flags %>% group_by()) %>%
+        mutate(age_group = "All participants", modality = "All modalities")
+    ) %>%
+      mutate(motion_rule = rule$label, .before = 1) %>%
+      select(
+        motion_rule, age_group, modality, runs_assessed, runs_excluded,
+        pct_runs_excluded, mean_pct_volumes_scrubbed
+      )
+  })
+}
+
+model_estimates_export <- function() {
+  map_dfr(MOTION_RULES, function(rule) {
+    data <- build_analysis_data(rule$fd_cutoff, rule$pct_cutoff)
+    outcome_models <- fit_outcome_models(data)
+
+    map_dfr(OUTCOMES, function(outcome) {
+      model <- outcome_models[[outcome]]
+      summary(model)$coefficients %>%
+        as.data.frame() %>%
+        rownames_to_column("term") %>%
+        as_tibble() %>%
+        transmute(
+          motion_rule = rule$label,
+          outcome = outcome,
+          term,
+          estimate = Estimate,
+          se = `Std. Error`,
+          df,
+          t = `t value`,
+          p = `Pr(>|t|)`,
+          n_observations = nrow(model@frame),
+          n_participants = n_distinct(model@frame$SubNum)
+        )
+    })
+  })
+}
+
+export_tables <- list()
+for (rule in MOTION_RULES) {
+  rule_data <- build_analysis_data(rule$fd_cutoff, rule$pct_cutoff)
+  export_tables[[paste0(rule$prefix, "_demographics.csv")]] <-
+    demographics_export(rule_data, rule$label)
+  export_tables[[paste0(rule$prefix, "_descriptives.csv")]] <-
+    descriptives_export(rule_data, rule$label)
+}
+export_tables[["motion_accounting.csv"]] <- motion_accounting_export()
+export_tables[["model_estimates.csv"]] <- model_estimates_export()
+export_tables[["outlier_sensitivity.csv"]] <-
+  bind_rows(outlier_sensitivity_by_rule)
+
+dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+for (filename in names(export_tables)) {
+  readr::write_csv(
+    export_tables[[filename]],
+    file.path(output_dir, filename)
+  )
+}
+```
+
+The tables the manuscript needs are written to `output/` when this document
+starts. `demographics.csv` and `descriptives.csv` are rule-specific and are
+therefore prefixed with the motion rule; the remaining files carry a
+`motion_rule` column and cover both rules in one file.
+
+```{r export-summary}
+renderTable({
+  tibble(
+    File = file.path("output", names(export_tables)),
+    Rows = vapply(export_tables, nrow, integer(1)),
+    Columns = vapply(export_tables, ncol, integer(1))
+  )
+}, striped = TRUE, bordered = TRUE, spacing = "s")
+```
+
 # Interactive age-effect figure
 
 The combined figure contains auditory, motor, and visual ROI panels. The blue
@@ -731,7 +1222,7 @@ get_roi_age_plot_info <- function(data, modality, outcome) {
   between_line <- tibble(
     age = between_age,
     within_cAge = 0,
-    between_cAge = between_age - 65,
+    between_cAge = between_age - OLDER_ADULT_AGE,
     Sex_M1 = typical_sex,
     Education = typical_education,
     SubNum = plot_data$SubNum[1]
@@ -856,300 +1347,6 @@ renderPlot({
       )
     ) &
     theme(legend.position = "bottom")
-}, res = 110)
-```
-
-# Exploratory three-wave longitudinal analysis in MIND-C
-
-This deliberately underpowered analysis asks whether the within-person trend
-is also present in the MIND-C follow-up sample. Every included observation is
-restricted to cognitively healthy participants (`Subgroup == 1`). MIND-C is
-identified by the `mindc` Wave 3 subject ID, and matching Waves 1 and 2 are
-linked using `SubNum`. A participant-modality pair must have retained data at
-all three waves under the selected motion rule. The parsimonious exploratory
-models adjust for modality and include a participant random intercept; no
-multiplicity correction is applied.
-
-```{r mindc-analysis, include=FALSE}
-mindc_ids <- df_mind_long %>%
-  filter(
-    Subgroup == 1,
-    Wave_Num == 3,
-    stringr::str_starts(stringr::str_to_lower(Subject), "mindc")
-  ) %>%
-  distinct(SubNum) %>%
-  pull(SubNum)
-
-mindc_longitudinal_data <- reactive({
-  motion_filtered_data() %>%
-    filter(
-      SubNum %in% mindc_ids,
-      Subgroup == 1,
-      Wave_Num %in% c(1, 2, 3)
-    ) %>%
-    group_by(SubNum, Modality) %>%
-    filter(all(c(1, 2, 3) %in% Wave_Num)) %>%
-    ungroup() %>%
-    add_age_decomposition()
-})
-
-fit_mindc_model <- function(data, outcome) {
-  model_data <- data %>%
-    drop_na(
-      all_of(c(
-        outcome, "within_cAge", "aud_mot", "aud_vis", "SubNum"
-      ))
-    )
-
-  validate(need(
-    n_distinct(model_data$SubNum) >= 3,
-    paste(
-      "Fewer than three healthy MIND-C participants have complete",
-      "three-wave data",
-      "for", outcome, "under this motion rule."
-    )
-  ))
-
-  lmer(
-    reformulate(
-      c("within_cAge", "aud_mot", "aud_vis", "(1 | SubNum)"),
-      response = outcome
-    ),
-    data = model_data,
-    REML = FALSE
-  )
-}
-
-mindc_models <- reactive({
-  data <- mindc_longitudinal_data()
-  outcomes <- c("Reliability", "Confusability", "Distinctiveness")
-  setNames(
-    lapply(outcomes, function(outcome) {
-      fit_mindc_model(data, outcome)
-    }),
-    outcomes
-  )
-})
-
-mindc_longitudinal_effects <- reactive({
-  map_dfr(names(mindc_models()), function(outcome) {
-    model <- mindc_models()[[outcome]]
-    coefficient <- summary(model)$coefficients[
-      "within_cAge",
-      ,
-      drop = FALSE
-    ]
-    estimate <- coefficient[1, "Estimate"]
-    standard_error <- coefficient[1, "Std. Error"]
-    p_value <- coefficient[1, "Pr(>|t|)"]
-
-    tibble(
-      Outcome = outcome,
-      B = estimate,
-      SE = standard_error,
-      `95% CI lower` = estimate - 1.96 * standard_error,
-      `95% CI upper` = estimate + 1.96 * standard_error,
-      t = coefficient[1, "t value"],
-      df = coefficient[1, "df"],
-      p = p_value,
-      `Singular fit` = if_else(
-        lme4::isSingular(model),
-        "Yes",
-        "No"
-      )
-    )
-  })
-})
-```
-
-## Available exploratory sample
-
-```{r mindc-sample}
-renderTable({
-  data <- mindc_longitudinal_data()
-  tibble(
-    `Selected rule` = rule_label(),
-    `Three-wave participants` = n_distinct(data$SubNum),
-    `Complete three-wave participant-modality sets` =
-      n_distinct(interaction(data$SubNum, data$Modality)),
-    `Retained observations` = nrow(data)
-  )
-}, striped = TRUE, bordered = TRUE, spacing = "s")
-```
-
-## Estimated within-person age effects
-
-`B` is the estimated change in the neural measure per one-year increase in
-age. These estimates and *p* values should be treated as exploratory because
-the three-wave MIND-C sample is very small. A singular-fit indicator is
-included because the participant random-effect variance may not be estimable
-reliably in such a small sample.
-
-```{r mindc-effects-table}
-renderTable({
-  mindc_longitudinal_effects() %>%
-    mutate(
-      across(c(B, SE, `95% CI lower`, `95% CI upper`, t), ~ round(.x, 3)),
-      df = round(df, 1),
-      p = case_when(
-        p < .001 ~ "< .001",
-        TRUE ~ sprintf("%.3f", p)
-      )
-    )
-}, striped = TRUE, bordered = TRUE, spacing = "s")
-```
-
-## Exploratory model summary
-
-This display follows the outcome selected in the main outcome menu above.
-
-```{r mindc-model-summary}
-renderPrint({
-  cat("Exploratory healthy MIND-C three-wave longitudinal model\n")
-  cat(rule_label(), "\n")
-  cat("Outcome:", input$outcome, "\n\n")
-  print(summary(mindc_models()[[input$outcome]]))
-})
-```
-
-## Three-wave trajectories
-
-```{r mindc-trajectories, fig.width=13.5, fig.height=5.2, out.width='100%'}
-renderPlot({
-  plot_data <- mindc_longitudinal_data() %>%
-    select(
-      SubNum, Wave_Num, Age_DuringParticipation_, within_cAge, Modality,
-      all_of(input$outcome)
-    ) %>%
-    rename(value = all_of(input$outcome)) %>%
-    drop_na(value, Age_DuringParticipation_, within_cAge, SubNum)
-
-  validate(need(
-    nrow(plot_data) > 0,
-    "No complete three-wave observations are available for this outcome."
-  ))
-
-  trajectory_stats <- plot_data %>%
-    group_by(Modality) %>%
-    group_modify(~ {
-      modality_data <- .x
-      within_sd <- sd(modality_data$within_cAge, na.rm = TRUE)
-
-      if (n_distinct(modality_data$SubNum) < 3 ||
-          !is.finite(within_sd) || within_sd == 0) {
-        return(tibble(stats_label = "Longitudinal effect not estimable"))
-      }
-
-      tryCatch({
-        modality_model <- lmer(
-          value ~ within_cAge + (1 | SubNum),
-          data = modality_data,
-          REML = FALSE
-        )
-        coefficient <- summary(modality_model)$coefficients[
-          "within_cAge",
-          ,
-          drop = FALSE
-        ]
-        estimate <- coefficient[1, "Estimate"]
-        outcome_sd <- sd(modality_data$value, na.rm = TRUE)
-        standardized_estimate <- if (is.finite(outcome_sd) && outcome_sd > 0) {
-          estimate * within_sd / outcome_sd
-        } else {
-          NA_real_
-        }
-
-        tibble(
-          stats_label = sprintf(
-            "Longitudinal effect\nB = %.3f, β = %.3f\np = %s",
-            estimate,
-            standardized_estimate,
-            format_age_p(coefficient[1, "Pr(>|t|)"])
-          )
-        )
-      }, error = function(e) {
-        tibble(stats_label = "Longitudinal effect not estimable")
-      })
-    }) %>%
-    ungroup() %>%
-    mutate(
-      roi_label = recode(
-        as.character(Modality),
-        Aud = "Auditory",
-        Mot = "Motor",
-        Vis = "Visual"
-      )
-    )
-
-  available_modalities <- c("Aud", "Mot", "Vis")[
-    c("Aud", "Mot", "Vis") %in% as.character(unique(plot_data$Modality))
-  ]
-
-  roi_plots <- lapply(available_modalities, function(modality) {
-    modality_data <- plot_data %>%
-      filter(as.character(Modality) == modality)
-    modality_stats <- trajectory_stats %>%
-      filter(as.character(Modality) == modality)
-
-    ggplot(
-      modality_data,
-      aes(
-        x = Age_DuringParticipation_,
-        y = value,
-        group = SubNum
-      )
-    ) +
-      geom_line(colour = "#7A7A7A", linewidth = 0.55, alpha = 0.7) +
-      geom_point(aes(colour = factor(Wave_Num)), size = 2.5) +
-      scale_y_continuous(expand = expansion(mult = c(0.08, 0.08))) +
-      scale_colour_manual(
-        values = c(
-          "1" = "#3366CC",
-          "2" = "#E68A00",
-          "3" = "#CC0000"
-        ),
-        labels = c("Wave 1", "Wave 2", "Wave 3"),
-        name = NULL
-      ) +
-      labs(
-        title = modality_stats$roi_label[[1]],
-        subtitle = modality_stats$stats_label[[1]],
-        x = "Age",
-        y = paste("Neural", tolower(input$outcome))
-      ) +
-      theme_classic(base_size = 11) +
-      theme(
-        legend.position = "bottom",
-        plot.title = element_text(
-          face = "bold", size = 12, hjust = 0.5,
-          margin = margin(b = 4)
-        ),
-        plot.subtitle = element_text(
-          face = "plain", size = 8, hjust = 0.5, lineheight = 1.1,
-          margin = margin(b = 8)
-        ),
-        axis.title = element_text(size = 10),
-        axis.text = element_text(size = 9),
-        legend.text = element_text(size = 9)
-      )
-  })
-
-  trajectory_figure <- wrap_plots(roi_plots, nrow = 1) +
-    plot_layout(guides = "collect") +
-    plot_annotation(
-      title = paste(
-        "Exploratory healthy MIND-C three-wave trajectories:",
-        input$outcome
-      ),
-      subtitle = rule_label(),
-      theme = theme(
-        plot.title = element_text(face = "bold", hjust = 0.5),
-        plot.subtitle = element_text(size = 9, hjust = 0.5)
-      )
-    ) &
-    theme(legend.position = "bottom")
-
-  trajectory_figure
 }, res = 110)
 ```
 
