@@ -1440,46 +1440,119 @@ with a 95% CI ribbon, over session-level values averaged across modalities;
 which is the honest display of a within-person x modality interaction that is
 non-significant for all three outcomes.
 
+Both figures share one aesthetic mapping, defined once and reused by every
+panel. Colour encodes the outcome and nothing else (Okabe-Ito blue, vermillion,
+and green for reliability, confusability, and distinctiveness) and is applied
+to points, model lines, and CI ribbons. Shape encodes the modality and nothing
+else (circle, triangle, square for auditory, visual, motor) and is applied to
+points only. Because outcome is already named by a facet strip in every panel,
+the colour legend is suppressed and the shape legend is the only legend each
+figure carries. The panel A points are averages across modalities, so they have
+no modality to encode and are drawn as plain circles; shape is informative only
+in panel B. The grey two-wave segments in Figure 3 are the raw data layer and
+are deliberately left uncoloured so the model line stays visible on top of
+them.
+
 Titles, subtitles, and in-panel statistics are deliberately absent: panel
 identity comes from the tags and strip labels, and the statistics belong in
 Table 3 and the manuscript text.
 
 ```{r manuscript-figure-helpers, include=FALSE}
-# Okabe-Ito blue and vermillion, used for between-person (cross-sectional) and
-# within-person (longitudinal) effects respectively.
-BETWEEN_COLOUR <- "#0072B2"
-WITHIN_COLOUR <- "#D55E00"
-POINT_COLOUR <- "grey35"
-
-# Wrapped onto two lines: a rotated one-line title is taller than a Figure 2B
-# row and overruns the neighbouring panel.
-OUTCOME_AXIS_LABELS <- c(
-  Reliability = "Neural\nreliability",
-  Confusability = "Neural\nconfusability",
-  Distinctiveness = "Neural\ndistinctiveness"
+# ---------------------------------------------------------------------------
+# Shared aesthetic mapping for every manuscript figure.
+#
+# Colour encodes the outcome and nothing else. Shape encodes the modality and
+# nothing else. Both scales are defined once here and reused by every panel of
+# every figure; no figure defines its own palette.
+# ---------------------------------------------------------------------------
+OUTCOME_COLOURS <- c(
+  Reliability = "#0072B2",      # Okabe-Ito blue
+  Confusability = "#D55E00",    # Okabe-Ito vermillion
+  Distinctiveness = "#009E73"   # Okabe-Ito green
 )
 
+MODALITY_SHAPES <- c(
+  Auditory = 16,   # filled circle
+  Visual = 17,     # filled triangle
+  Motor = 15       # filled square
+)
+
+# Outcome identity is carried by a facet strip in every panel of Figures 2 and
+# 3, so the colour scales are drawn without a legend; the shape legend is the
+# only legend either figure shows.
+scale_outcome_colour <- scale_colour_manual(
+  values = OUTCOME_COLOURS,
+  guide = "none"
+)
+scale_outcome_fill <- scale_fill_manual(
+  values = OUTCOME_COLOURS,
+  guide = "none"
+)
+scale_modality_shape <- scale_shape_manual(
+  name = "Modality",
+  values = MODALITY_SHAPES,
+  guide = guide_legend(
+    direction = "horizontal",
+    override.aes = list(size = 2.4, alpha = 1)
+  )
+)
+
+OUTCOME_STRIP_LABELS <- c(
+  Reliability = "Neural reliability",
+  Confusability = "Neural confusability",
+  Distinctiveness = "Neural distinctiveness"
+)
+outcome_labeller <- labeller(outcome = OUTCOME_STRIP_LABELS)
+
+# Raw two-wave segments are drawn in neutral grey: they are the data layer, and
+# leaving them uncoloured keeps colour reserved for the outcome and keeps the
+# model line visible on top of them.
+SEGMENT_COLOUR <- "grey45"
+SEGMENT_ALPHA <- 0.3
+POINT_SIZE <- 1.6
+POINT_ALPHA <- 0.4
+DENSE_POINT_ALPHA <- 0.3
+RIBBON_ALPHA <- 0.25
+LINE_WIDTH <- 0.8
+
+AGE_AXIS_LABEL <- "Age (years)"
+WITHIN_TIME_LABEL <- "Years from first wave"
+WITHIN_TIME_BREAKS <- c(0, 2, 4, 6)
+
 FIGURE_WIDTH_MM <- 180
+FIGURE_HEIGHT_MM <- 190
+PANEL_HEIGHTS <- c(55, 135)   # millimetres: panel A, panel B
 GRID_POINTS <- 100
 
-manuscript_theme <- function(base_size = 11) {
+manuscript_theme <- function(base_size = 9) {
   theme_classic(base_size = base_size) +
     theme(
       panel.grid = element_blank(),
       axis.text = element_text(colour = "black"),
       axis.title = element_text(colour = "black"),
-      axis.line = element_line(colour = "black", linewidth = 0.35),
-      axis.ticks = element_line(colour = "black", linewidth = 0.35),
+      axis.line = element_line(colour = "black", linewidth = 0.3),
+      axis.ticks = element_line(colour = "black", linewidth = 0.3),
+      # Plain strip text at the axis-title size: the strips are labels, not
+      # headings.
       strip.background = element_blank(),
-      strip.text = element_text(face = "bold", size = rel(0.95)),
-      legend.position = "bottom",
-      legend.title = element_blank(),
-      legend.key.height = unit(8, "pt"),
+      strip.placement = "outside",
+      strip.text = element_text(face = "plain", size = rel(1), colour = "black"),
+      legend.position = "none",
+      legend.key.height = unit(9, "pt"),
+      legend.margin = margin(t = 1, b = 0),
       plot.title = element_blank(),
       plot.subtitle = element_blank(),
-      plot.tag = element_text(face = "bold", size = rel(1.15)),
-      plot.margin = margin(4, 6, 4, 4)
+      plot.tag = element_text(face = "bold", size = 11),
+      plot.margin = margin(3, 5, 3, 3)
     )
+}
+
+shape_legend_theme <- function() {
+  theme(
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    legend.title = element_text(size = rel(1), colour = "black")
+  )
 }
 
 # predict.merMod gives no standard errors, so the fixed-effect prediction and
@@ -1516,318 +1589,362 @@ complete_outcome_data <- function(data, outcome) {
   data %>% drop_na(all_of(c(outcome, MODEL_TERMS, "SubNum")))
 }
 
-# Figure 2A: pooled between-person effect for one outcome.
-build_pooled_between_panel <- function(data, model, outcome, show_x_title) {
-  panel_data <- complete_outcome_data(data, outcome)
+outcome_factor <- function(x) factor(x, levels = OUTCOMES)
 
-  participant_points <- panel_data %>%
-    group_by(SubNum) %>%
-    summarise(
-      age = mean(Age_DuringParticipation_, na.rm = TRUE),
-      value = mean(.data[[outcome]], na.rm = TRUE),
-      .groups = "drop"
-    )
-
-  age_grid <- seq(
-    min(panel_data$Age_DuringParticipation_, na.rm = TRUE),
-    max(panel_data$Age_DuringParticipation_, na.rm = TRUE),
-    length.out = GRID_POINTS
+typical_covariates <- function(data) {
+  list(
+    Sex_M1 = median(data$Sex_M1, na.rm = TRUE),
+    Education = median(data$Education, na.rm = TRUE)
   )
-  prediction_grid <- tibble(
-    age = age_grid,
-    between_cAge = age_grid - OLDER_ADULT_AGE,
-    within_cAge = 0,
-    Sex_M1 = median(panel_data$Sex_M1, na.rm = TRUE),
-    Education = median(panel_data$Education, na.rm = TRUE),
-    # Effect-coded contrasts at zero: the average of the three modalities.
-    aud_mot = 0,
-    aud_vis = 0
-  )
-  effect_line <- fixed_effect_predictions(model, prediction_grid)
-
-  ggplot() +
-    geom_point(
-      data = participant_points,
-      aes(age, value),
-      size = 0.8, alpha = 0.3, colour = POINT_COLOUR
-    ) +
-    geom_ribbon(
-      data = effect_line,
-      aes(age, ymin = conf_low, ymax = conf_high),
-      fill = BETWEEN_COLOUR, alpha = 0.25
-    ) +
-    geom_line(
-      data = effect_line,
-      aes(age, predicted),
-      colour = BETWEEN_COLOUR, linewidth = 0.8
-    ) +
-    labs(
-      x = if (show_x_title) "Age (years)" else NULL,
-      y = unname(OUTCOME_AXIS_LABELS[[outcome]])
-    ) +
-    manuscript_theme()
 }
 
-# Figure 2B: between-person effect resolved by modality, from the interaction
-# model, so the lines match the emmeans simple slopes.
-build_modality_between_panel <- function(data, interaction_model, outcome,
-                                         show_x_title) {
-  panel_data <- prepare_interaction_data(complete_outcome_data(data, outcome))
+# ---------------------------------------------------------------------------
+# Panel builders. Panel A is a one-row facet_wrap over outcome; panel B is a
+# facet_grid of outcome (rows, labelled outside on the left in place of y
+# titles) by modality (columns, labelled once at the top). Both are single
+# ggplots, so axes and limits are shared automatically.
+# ---------------------------------------------------------------------------
+build_panel_a <- function(points, lines, x_label, segments = NULL,
+                          point_alpha = POINT_ALPHA, x_scale = NULL) {
+  figure <- ggplot()
 
-  prediction_grid <- panel_data %>%
-    group_by(Modality) %>%
-    group_modify(~ tibble(
-      age = seq(
-        min(.x$Age_DuringParticipation_, na.rm = TRUE),
-        max(.x$Age_DuringParticipation_, na.rm = TRUE),
-        length.out = GRID_POINTS
+  if (!is.null(segments)) {
+    figure <- figure +
+      geom_line(
+        data = segments,
+        aes(x, value, group = SubNum),
+        colour = SEGMENT_COLOUR, linewidth = 0.25, alpha = SEGMENT_ALPHA
       )
-    )) %>%
-    ungroup() %>%
-    mutate(
-      between_cAge = age - OLDER_ADULT_AGE,
-      within_cAge = 0,
-      Sex_M1 = median(panel_data$Sex_M1, na.rm = TRUE),
-      Education = median(panel_data$Education, na.rm = TRUE)
-    )
-  effect_lines <- fixed_effect_predictions(
-    interaction_model,
-    prediction_grid,
-    contrasts_option = INTERACTION_CONTRASTS
-  )
+  }
 
-  ggplot() +
+  figure <- figure +
     geom_point(
-      data = panel_data,
-      aes(Age_DuringParticipation_, .data[[outcome]]),
-      size = 0.55, alpha = 0.28, colour = POINT_COLOUR
+      data = points,
+      aes(x, value, colour = outcome),
+      shape = 16, size = POINT_SIZE, alpha = point_alpha
     ) +
     geom_ribbon(
-      data = effect_lines,
-      aes(age, ymin = conf_low, ymax = conf_high),
-      fill = BETWEEN_COLOUR, alpha = 0.25
+      data = lines,
+      aes(x, ymin = conf_low, ymax = conf_high, fill = outcome),
+      alpha = RIBBON_ALPHA, colour = NA
     ) +
     geom_line(
-      data = effect_lines,
-      aes(age, predicted),
-      colour = BETWEEN_COLOUR, linewidth = 0.8
+      data = lines,
+      aes(x, predicted, colour = outcome),
+      linewidth = LINE_WIDTH
     ) +
-    facet_wrap(~ Modality, nrow = 1) +
-    labs(
-      x = if (show_x_title) "Age (years)" else NULL,
-      y = unname(OUTCOME_AXIS_LABELS[[outcome]])
+    facet_wrap(
+      ~ outcome,
+      nrow = 1, scales = "free_y", labeller = outcome_labeller
     ) +
+    scale_outcome_colour +
+    scale_outcome_fill +
+    labs(x = x_label, y = NULL) +
     manuscript_theme()
+
+  if (!is.null(x_scale)) figure <- figure + x_scale
+  figure
 }
 
-# Figure 3 uses time since each participant's own first retained wave rather
-# than chronological age, so the two-wave segments are aligned at zero. The
-# model line is drawn in the same coordinate: within_cAge is centred on each
-# participant's mean age, so shifting it by the mean of
-# (years_from_first - within_cAge) puts the fitted slope on the plotted axis
-# without changing the slope itself.
-WITHIN_TIME_LABEL <- "Years from first wave"
+build_panel_b <- function(points, lines, x_label, segments = NULL,
+                          point_alpha = DENSE_POINT_ALPHA, x_scale = NULL) {
+  figure <- ggplot()
 
-within_time_offset <- function(data) {
-  mean(data$years_from_first - data$within_cAge, na.rm = TRUE)
+  if (!is.null(segments)) {
+    figure <- figure +
+      geom_line(
+        data = segments,
+        aes(x, value, group = SubNum),
+        colour = SEGMENT_COLOUR, linewidth = 0.25, alpha = SEGMENT_ALPHA
+      )
+  }
+
+  figure <- figure +
+    geom_point(
+      data = points,
+      aes(x, value, colour = outcome, shape = Modality),
+      size = POINT_SIZE, alpha = point_alpha
+    ) +
+    geom_ribbon(
+      data = lines,
+      aes(x, ymin = conf_low, ymax = conf_high, fill = outcome),
+      alpha = RIBBON_ALPHA, colour = NA
+    ) +
+    geom_line(
+      data = lines,
+      aes(x, predicted, colour = outcome),
+      linewidth = LINE_WIDTH
+    ) +
+    facet_grid(
+      outcome ~ Modality,
+      scales = "free_y", switch = "y", labeller = outcome_labeller
+    ) +
+    scale_outcome_colour +
+    scale_outcome_fill +
+    scale_modality_shape +
+    labs(x = x_label, y = NULL) +
+    manuscript_theme() +
+    shape_legend_theme()
+
+  if (!is.null(x_scale)) figure <- figure + x_scale
+  figure
 }
 
-within_prediction_grid <- function(data) {
-  offset <- within_time_offset(data)
-  within_range <- range(data$within_cAge, na.rm = TRUE) + offset
-
-  # within_cAge is centred within participant, so its observed range maps onto
-  # negative follow-up time for the longest intervals. The line is clipped to
-  # the observed follow-up window; being a straight line, its slope and CI are
-  # unaffected by where it is truncated.
-  time_range <- c(
-    max(0, within_range[1]),
-    min(max(data$years_from_first, na.rm = TRUE), within_range[2])
-  )
-
-  tibble(
-    years_from_first = seq(
-      time_range[1], time_range[2], length.out = GRID_POINTS
+combine_manuscript_panels <- function(panel_a, panel_b) {
+  wrap_elements(panel_a) / wrap_elements(panel_b) +
+    plot_layout(heights = PANEL_HEIGHTS) +
+    plot_annotation(
+      tag_levels = "A",
+      theme = theme(plot.tag = element_text(face = "bold", size = 11))
     )
-  ) %>%
-    mutate(within_cAge = years_from_first - offset)
 }
 
-# Figure 3A: pooled within-person effect for one outcome. One line per
-# returning participant, averaged across modalities within each session.
-build_pooled_within_panel <- function(data, model, outcome, show_x_title) {
-  panel_data <- complete_outcome_data(data, outcome)
+# ---------------------------------------------------------------------------
+# Figure 2: between-person age effects.
+# ---------------------------------------------------------------------------
+figure2_pooled_points <- function(data) {
+  map_dfr(OUTCOMES, function(outcome_name) {
+    complete_outcome_data(data, outcome_name) %>%
+      group_by(SubNum) %>%
+      summarise(
+        x = mean(Age_DuringParticipation_, na.rm = TRUE),
+        value = mean(.data[[outcome_name]], na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      mutate(outcome = outcome_name)
+  }) %>%
+    mutate(outcome = outcome_factor(outcome))
+}
 
-  session_points <- panel_data %>%
-    group_by(SubNum, Wave_Num) %>%
-    summarise(
-      age = mean(Age_DuringParticipation_, na.rm = TRUE),
-      within_cAge = mean(within_cAge, na.rm = TRUE),
-      value = mean(.data[[outcome]], na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    group_by(SubNum) %>%
-    filter(n() >= 2) %>%
-    mutate(years_from_first = age - min(age, na.rm = TRUE)) %>%
-    ungroup()
+figure2_pooled_lines <- function(data, models) {
+  map_dfr(OUTCOMES, function(outcome_name) {
+    panel_data <- complete_outcome_data(data, outcome_name)
+    covariates <- typical_covariates(panel_data)
 
-  prediction_grid <- within_prediction_grid(session_points) %>%
-    mutate(
-      between_cAge = 0,
-      Sex_M1 = median(panel_data$Sex_M1, na.rm = TRUE),
-      Education = median(panel_data$Education, na.rm = TRUE),
+    age_grid <- seq(
+      min(panel_data$Age_DuringParticipation_, na.rm = TRUE),
+      max(panel_data$Age_DuringParticipation_, na.rm = TRUE),
+      length.out = GRID_POINTS
+    )
+    prediction_grid <- tibble(
+      x = age_grid,
+      between_cAge = age_grid - OLDER_ADULT_AGE,
+      within_cAge = 0,
+      Sex_M1 = covariates$Sex_M1,
+      Education = covariates$Education,
+      # Effect-coded contrasts at zero: the average of the three modalities.
       aud_mot = 0,
       aud_vis = 0
     )
-  effect_line <- fixed_effect_predictions(model, prediction_grid)
 
-  ggplot() +
-    geom_line(
-      data = session_points %>% arrange(SubNum, Wave_Num),
-      aes(years_from_first, value, group = SubNum),
-      colour = POINT_COLOUR, linewidth = 0.3, alpha = 0.45
-    ) +
-    geom_point(
-      data = session_points,
-      aes(years_from_first, value),
-      size = 0.7, alpha = 0.35, colour = POINT_COLOUR
-    ) +
-    geom_ribbon(
-      data = effect_line,
-      aes(years_from_first, ymin = conf_low, ymax = conf_high),
-      fill = WITHIN_COLOUR, alpha = 0.25
-    ) +
-    geom_line(
-      data = effect_line,
-      aes(years_from_first, predicted),
-      colour = WITHIN_COLOUR, linewidth = 0.9
-    ) +
-    labs(
-      x = if (show_x_title) WITHIN_TIME_LABEL else NULL,
-      y = unname(OUTCOME_AXIS_LABELS[[outcome]])
-    ) +
-    manuscript_theme()
+    fixed_effect_predictions(models[[outcome_name]], prediction_grid) %>%
+      mutate(outcome = outcome_name)
+  }) %>%
+    mutate(outcome = outcome_factor(outcome))
 }
 
-# Figure 3B: within-person effect resolved by modality, using the interaction
-# model so the lines match the emmeans within_cAge simple slopes. The ribbons
-# are wide and overlapping because these interactions are non-significant.
-build_modality_within_panel <- function(data, interaction_model, outcome,
-                                        show_x_title) {
-  panel_data <- prepare_interaction_data(complete_outcome_data(data, outcome))
+figure2_modality_points <- function(data) {
+  map_dfr(OUTCOMES, function(outcome_name) {
+    prepare_interaction_data(complete_outcome_data(data, outcome_name)) %>%
+      transmute(
+        Modality,
+        x = Age_DuringParticipation_,
+        value = .data[[outcome_name]],
+        outcome = outcome_name
+      )
+  }) %>%
+    mutate(outcome = outcome_factor(outcome))
+}
 
-  longitudinal_data <- panel_data %>%
-    group_by(SubNum, Modality) %>%
-    filter(n_distinct(Wave_Num) >= 2) %>%
-    mutate(
-      years_from_first = Age_DuringParticipation_ -
-        min(Age_DuringParticipation_, na.rm = TRUE)
-    ) %>%
-    ungroup()
-
-  prediction_grid <- longitudinal_data %>%
-    group_by(Modality) %>%
-    group_modify(~ within_prediction_grid(.x)) %>%
-    ungroup() %>%
-    mutate(
-      between_cAge = 0,
-      Sex_M1 = median(panel_data$Sex_M1, na.rm = TRUE),
-      Education = median(panel_data$Education, na.rm = TRUE)
+figure2_modality_lines <- function(data, interaction_models) {
+  map_dfr(OUTCOMES, function(outcome_name) {
+    panel_data <- prepare_interaction_data(
+      complete_outcome_data(data, outcome_name)
     )
-  effect_lines <- fixed_effect_predictions(
-    interaction_model,
-    prediction_grid,
-    contrasts_option = INTERACTION_CONTRASTS
-  )
+    covariates <- typical_covariates(panel_data)
 
-  ggplot() +
-    geom_line(
-      data = longitudinal_data %>% arrange(SubNum, Wave_Num),
-      aes(years_from_first, .data[[outcome]], group = SubNum),
-      colour = POINT_COLOUR, linewidth = 0.3, alpha = 0.45
-    ) +
-    geom_point(
-      data = longitudinal_data,
-      aes(years_from_first, .data[[outcome]]),
-      size = 0.6, alpha = 0.35, colour = POINT_COLOUR
-    ) +
-    geom_ribbon(
-      data = effect_lines,
-      aes(years_from_first, ymin = conf_low, ymax = conf_high),
-      fill = WITHIN_COLOUR, alpha = 0.25
-    ) +
-    geom_line(
-      data = effect_lines,
-      aes(years_from_first, predicted),
-      colour = WITHIN_COLOUR, linewidth = 0.8
-    ) +
-    facet_wrap(~ Modality, nrow = 1) +
-    labs(
-      x = if (show_x_title) WITHIN_TIME_LABEL else NULL,
-      y = unname(OUTCOME_AXIS_LABELS[[outcome]])
-    ) +
-    manuscript_theme()
+    prediction_grid <- panel_data %>%
+      group_by(Modality) %>%
+      group_modify(~ tibble(
+        x = seq(
+          min(.x$Age_DuringParticipation_, na.rm = TRUE),
+          max(.x$Age_DuringParticipation_, na.rm = TRUE),
+          length.out = GRID_POINTS
+        )
+      )) %>%
+      ungroup() %>%
+      mutate(
+        between_cAge = x - OLDER_ADULT_AGE,
+        within_cAge = 0,
+        Sex_M1 = covariates$Sex_M1,
+        Education = covariates$Education
+      )
+
+    fixed_effect_predictions(
+      interaction_models[[outcome_name]],
+      prediction_grid,
+      contrasts_option = INTERACTION_CONTRASTS
+    ) %>%
+      mutate(outcome = outcome_name)
+  }) %>%
+    mutate(outcome = outcome_factor(outcome))
 }
 
 build_figure2 <- function(data, models, interaction_models) {
-  panel_a <- wrap_plots(
-    lapply(OUTCOMES, function(outcome) {
-      build_pooled_between_panel(data, models[[outcome]], outcome, TRUE)
-    }),
-    nrow = 1
+  # Panel A points are participant means across modalities and waves: session x
+  # modality points are unreadable once pooled. They are a display layer only —
+  # the line and ribbon come from the pooled main model, not from these means.
+  panel_a <- build_panel_a(
+    figure2_pooled_points(data),
+    figure2_pooled_lines(data, models),
+    AGE_AXIS_LABEL,
+    point_alpha = POINT_ALPHA
   )
 
-  panel_b <- wrap_plots(
-    lapply(seq_along(OUTCOMES), function(index) {
-      outcome <- OUTCOMES[[index]]
-      build_modality_between_panel(
-        data,
-        interaction_models[[outcome]],
-        outcome,
-        show_x_title = index == length(OUTCOMES)
+  panel_b <- build_panel_b(
+    figure2_modality_points(data),
+    figure2_modality_lines(data, interaction_models),
+    AGE_AXIS_LABEL
+  )
+
+  combine_manuscript_panels(panel_a, panel_b)
+}
+
+# ---------------------------------------------------------------------------
+# Figure 3: within-person age effects, on time since each participant's own
+# first retained wave so every trajectory starts at zero.
+#
+# within_cAge is centred on each participant's mean age, so it maps onto the
+# plotted axis with a constant offset. The line is clipped to the follow-up
+# actually observed in that panel; being a straight line, its slope and CI are
+# unaffected by where it is truncated.
+# ---------------------------------------------------------------------------
+within_prediction_grid <- function(data) {
+  offset <- mean(data$x - data$within_cAge, na.rm = TRUE)
+  within_range <- range(data$within_cAge, na.rm = TRUE) + offset
+  time_range <- c(
+    max(0, within_range[1]),
+    min(max(data$x, na.rm = TRUE), within_range[2])
+  )
+
+  tibble(x = seq(time_range[1], time_range[2], length.out = GRID_POINTS)) %>%
+    mutate(within_cAge = x - offset)
+}
+
+figure3_pooled_sessions <- function(data) {
+  map_dfr(OUTCOMES, function(outcome_name) {
+    complete_outcome_data(data, outcome_name) %>%
+      group_by(SubNum, Wave_Num) %>%
+      summarise(
+        age = mean(Age_DuringParticipation_, na.rm = TRUE),
+        within_cAge = mean(within_cAge, na.rm = TRUE),
+        value = mean(.data[[outcome_name]], na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      group_by(SubNum) %>%
+      filter(n() >= 2) %>%
+      mutate(x = age - min(age, na.rm = TRUE)) %>%
+      ungroup() %>%
+      mutate(outcome = outcome_name)
+  }) %>%
+    mutate(outcome = outcome_factor(outcome))
+}
+
+figure3_pooled_lines <- function(data, models, sessions) {
+  map_dfr(OUTCOMES, function(outcome_name) {
+    covariates <- typical_covariates(complete_outcome_data(data, outcome_name))
+
+    prediction_grid <- sessions %>%
+      filter(outcome == outcome_name) %>%
+      within_prediction_grid() %>%
+      mutate(
+        between_cAge = 0,
+        Sex_M1 = covariates$Sex_M1,
+        Education = covariates$Education,
+        aud_mot = 0,
+        aud_vis = 0
       )
-    }),
-    ncol = 1
-  )
 
-  wrap_elements(panel_a) / wrap_elements(panel_b) +
-    plot_layout(heights = c(1, 2.7)) +
-    plot_annotation(
-      tag_levels = "A",
-      theme = theme(plot.tag = element_text(face = "bold", size = 13))
-    )
+    fixed_effect_predictions(models[[outcome_name]], prediction_grid) %>%
+      mutate(outcome = outcome_name)
+  }) %>%
+    mutate(outcome = outcome_factor(outcome))
+}
+
+figure3_modality_segments <- function(data) {
+  map_dfr(OUTCOMES, function(outcome_name) {
+    prepare_interaction_data(complete_outcome_data(data, outcome_name)) %>%
+      group_by(SubNum, Modality) %>%
+      filter(n_distinct(Wave_Num) >= 2) %>%
+      mutate(
+        x = Age_DuringParticipation_ -
+          min(Age_DuringParticipation_, na.rm = TRUE)
+      ) %>%
+      ungroup() %>%
+      transmute(
+        SubNum, Modality, Wave_Num, x, within_cAge,
+        value = .data[[outcome_name]],
+        outcome = outcome_name
+      )
+  }) %>%
+    mutate(outcome = outcome_factor(outcome))
+}
+
+figure3_modality_lines <- function(data, interaction_models, segments) {
+  map_dfr(OUTCOMES, function(outcome_name) {
+    covariates <- typical_covariates(complete_outcome_data(data, outcome_name))
+
+    prediction_grid <- segments %>%
+      filter(outcome == outcome_name) %>%
+      group_by(Modality) %>%
+      group_modify(~ within_prediction_grid(.x)) %>%
+      ungroup() %>%
+      mutate(
+        between_cAge = 0,
+        Sex_M1 = covariates$Sex_M1,
+        Education = covariates$Education
+      )
+
+    fixed_effect_predictions(
+      interaction_models[[outcome_name]],
+      prediction_grid,
+      contrasts_option = INTERACTION_CONTRASTS
+    ) %>%
+      mutate(outcome = outcome_name)
+  }) %>%
+    mutate(outcome = outcome_factor(outcome))
 }
 
 build_figure3 <- function(data, models, interaction_models) {
-  panel_a <- wrap_plots(
-    lapply(OUTCOMES, function(outcome) {
-      build_pooled_within_panel(data, models[[outcome]], outcome, TRUE)
-    }),
-    nrow = 1
+  within_x_scale <- scale_x_continuous(breaks = WITHIN_TIME_BREAKS)
+
+  # Panel A: one segment per participant, the outcome averaged across whichever
+  # modalities survived motion exclusion in that session. The averaged points
+  # are a display layer only; the line and ribbon are the pooled main model.
+  sessions <- figure3_pooled_sessions(data)
+  panel_a <- build_panel_a(
+    sessions,
+    figure3_pooled_lines(data, models, sessions),
+    WITHIN_TIME_LABEL,
+    segments = sessions,
+    x_scale = within_x_scale
   )
 
-  panel_b <- wrap_plots(
-    lapply(seq_along(OUTCOMES), function(index) {
-      outcome <- OUTCOMES[[index]]
-      build_modality_within_panel(
-        data,
-        interaction_models[[outcome]],
-        outcome,
-        show_x_title = index == length(OUTCOMES)
-      )
-    }),
-    ncol = 1
+  segments <- figure3_modality_segments(data)
+  panel_b <- build_panel_b(
+    segments,
+    figure3_modality_lines(data, interaction_models, segments),
+    WITHIN_TIME_LABEL,
+    segments = segments,
+    point_alpha = POINT_ALPHA,
+    x_scale = within_x_scale
   )
 
-  wrap_elements(panel_a) / wrap_elements(panel_b) +
-    plot_layout(heights = c(1, 2.7)) +
-    plot_annotation(
-      tag_levels = "A",
-      theme = theme(plot.tag = element_text(face = "bold", size = 13))
-    )
+  combine_manuscript_panels(panel_a, panel_b)
 }
 
-save_manuscript_figure <- function(figure, directory, name, height_mm) {
+save_manuscript_figure <- function(figure, directory, name,
+                                   height_mm = FIGURE_HEIGHT_MM) {
   dir.create(directory, showWarnings = FALSE, recursive = TRUE)
 
   ggsave(
@@ -1846,9 +1963,6 @@ save_manuscript_figure <- function(figure, directory, name, height_mm) {
 ```
 
 ```{r manuscript-figures, include=FALSE}
-FIGURE2_HEIGHT_MM <- 160
-FIGURE3_HEIGHT_MM <- 160
-
 figure_dir <- file.path(output_dir, "figures")
 supplement_figure_dir <- file.path(figure_dir, "supplement")
 
@@ -1870,33 +1984,29 @@ names(manuscript_figures) <- vapply(
 
 saved_figure_files <- c(
   save_manuscript_figure(
-    manuscript_figures$primary$figure2, figure_dir, "figure2",
-    FIGURE2_HEIGHT_MM
+    manuscript_figures$primary$figure2, figure_dir, "figure2"
   ),
   save_manuscript_figure(
-    manuscript_figures$primary$figure3, figure_dir, "figure3",
-    FIGURE3_HEIGHT_MM
+    manuscript_figures$primary$figure3, figure_dir, "figure3"
   ),
   save_manuscript_figure(
-    manuscript_figures$liberal$figure2, supplement_figure_dir, "figure2",
-    FIGURE2_HEIGHT_MM
+    manuscript_figures$liberal$figure2, supplement_figure_dir, "figure2"
   ),
   save_manuscript_figure(
-    manuscript_figures$liberal$figure3, supplement_figure_dir, "figure3",
-    FIGURE3_HEIGHT_MM
+    manuscript_figures$liberal$figure3, supplement_figure_dir, "figure3"
   )
 )
 ```
 
 ## Figure 2 (primary motion rule)
 
-```{r figure2-display, fig.width=7.09, fig.height=6.3, out.width='100%'}
+```{r figure2-display, fig.width=7.09, fig.height=7.48, out.width='100%'}
 manuscript_figures$primary$figure2
 ```
 
 ## Figure 3 (primary motion rule)
 
-```{r figure3-display, fig.width=7.09, fig.height=6.3, out.width='100%'}
+```{r figure3-display, fig.width=7.09, fig.height=7.48, out.width='100%'}
 manuscript_figures$primary$figure3
 ```
 
