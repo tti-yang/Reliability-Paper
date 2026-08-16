@@ -7,8 +7,19 @@
 #           data/derived/run_flags_by_rule.rds
 #           data/derived/subject_age_groups.rds
 
-source(here::here("R", "setup.R"))
-source(here("R", "data.R"))
+# Anchor on this file's own location, so the script runs from any working
+# directory. here() searches upward from the working directory instead, which
+# is the wrong root when the script is launched by path from elsewhere.
+PROJECT_ROOT <- local({
+  file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
+  if (length(file_arg) == 1) {
+    dirname(dirname(normalizePath(sub("^--file=", "", file_arg))))
+  } else {
+    here::here()
+  }
+})
+source(file.path(PROJECT_ROOT, "R", "setup.R"))
+source(file.path(PROJECT_ROOT, "R", "data.R"))
 
 message("Reading raw data from ", RAW_DATA_DIR)
 source_data <- load_source_data()

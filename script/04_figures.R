@@ -11,10 +11,21 @@
 # rather than carried over from 02: lmer is deterministic on identical rows, so
 # this is the same fit, and it keeps the stages independent.
 
-source(here::here("R", "setup.R"))
-source(here("R", "data.R"))
-source(here("R", "models.R"))
-source(here("R", "figures.R"))
+# Anchor on this file's own location, so the script runs from any working
+# directory. here() searches upward from the working directory instead, which
+# is the wrong root when the script is launched by path from elsewhere.
+PROJECT_ROOT <- local({
+  file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
+  if (length(file_arg) == 1) {
+    dirname(dirname(normalizePath(sub("^--file=", "", file_arg))))
+  } else {
+    here::here()
+  }
+})
+source(file.path(PROJECT_ROOT, "R", "setup.R"))
+source(file.path(PROJECT_ROOT, "R", "data.R"))
+source(file.path(PROJECT_ROOT, "R", "models.R"))
+source(file.path(PROJECT_ROOT, "R", "figures.R"))
 
 analysis_data_by_rule <- read_derived("analysis_data_by_rule")
 

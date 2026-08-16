@@ -13,9 +13,13 @@ in the filenames:
 
 ## Running the pipeline
 
-Open `MiND-Reliability.Rproj`, or run from anywhere — every path is resolved
-with `here()`, so no working directory matters and nothing needs editing after
-a clone.
+Open `MiND-Reliability.Rproj`, or run from anywhere. Each script anchors on its
+own file location and derives every path from the project root, so the working
+directory does not matter and nothing needs editing after a clone. (`here()` on
+its own is not enough for this: it searches upward from the *working
+directory*, so a script launched by path from outside the project would anchor
+outside the project. It is still what the interactive document uses, where the
+working directory is inside the project by construction.)
 
 ```sh
 Rscript script/01_prepare_data.R

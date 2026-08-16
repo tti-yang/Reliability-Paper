@@ -35,15 +35,43 @@ library(grid)
 # ---------------------------------------------------------------------------
 # Paths.
 #
-# here() resolves against MiND-Reliability.Rproj at the repository root, so
-# every path below is correct no matter which directory R was started in and
-# nothing has to be edited after a clone.
+# Every path below is derived from PROJECT_ROOT, so nothing has to be edited
+# after a clone and there are no absolute paths anywhere in the repository.
+#
+# PROJECT_ROOT is set by the calling script from its own file location, before
+# this file is sourced -- see the four-line header of any of script/01-05.
+# here() cannot do that job on its own: it searches upward from the *working
+# directory*, so `Rscript /path/to/repo/script/01_prepare_data.R` launched from
+# somewhere else anchors on that somewhere else and silently resolves every
+# path to the wrong place. here::i_am() has the same limitation; it at least
+# errors instead of guessing.
+#
+# When PROJECT_ROOT is not already set -- the interactive document, or a
+# console session -- here() is the right answer, because the working directory
+# is then inside the project by construction. The check below turns a wrong
+# root into an immediate error either way.
 # ---------------------------------------------------------------------------
-RAW_DATA_DIR <- here("data", "raw")
-DERIVED_DATA_DIR <- here("data", "derived")
-TABLE_DIR <- here("output", "tables")
-FIGURE_DIR <- here("output", "figures")
-MANUSCRIPT_DIR <- here("manuscript")
+PROJECT_FILE <- "MiND-Reliability.Rproj"
+
+if (!exists("PROJECT_ROOT")) {
+  PROJECT_ROOT <- here()
+}
+PROJECT_ROOT <- normalizePath(PROJECT_ROOT, mustWork = TRUE)
+
+if (!file.exists(file.path(PROJECT_ROOT, PROJECT_FILE))) {
+  stop(
+    "Project root resolved to '", PROJECT_ROOT, "', which does not contain ",
+    PROJECT_FILE, ". Run the scripts with Rscript, or open the project first."
+  )
+}
+
+RAW_DATA_DIR <- file.path(PROJECT_ROOT, "data", "raw")
+DERIVED_DATA_DIR <- file.path(PROJECT_ROOT, "data", "derived")
+TABLE_DIR <- file.path(PROJECT_ROOT, "output", "tables")
+FIGURE_DIR <- file.path(PROJECT_ROOT, "output", "figures")
+MANUSCRIPT_DIR <- file.path(PROJECT_ROOT, "manuscript")
+
+project_path <- function(...) file.path(PROJECT_ROOT, ...)
 
 # ---------------------------------------------------------------------------
 # Analysis constants.

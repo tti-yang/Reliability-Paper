@@ -13,9 +13,20 @@
 # with the motion rule; the rest carry a motion_rule column and cover both
 # rules in one file.
 
-source(here::here("R", "setup.R"))
-source(here("R", "data.R"))
-source(here("R", "models.R"))
+# Anchor on this file's own location, so the script runs from any working
+# directory. here() searches upward from the working directory instead, which
+# is the wrong root when the script is launched by path from elsewhere.
+PROJECT_ROOT <- local({
+  file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
+  if (length(file_arg) == 1) {
+    dirname(dirname(normalizePath(sub("^--file=", "", file_arg))))
+  } else {
+    here::here()
+  }
+})
+source(file.path(PROJECT_ROOT, "R", "setup.R"))
+source(file.path(PROJECT_ROOT, "R", "data.R"))
+source(file.path(PROJECT_ROOT, "R", "models.R"))
 
 analysis_data_by_rule <- read_derived("analysis_data_by_rule")
 run_flags_by_rule <- read_derived("run_flags_by_rule")

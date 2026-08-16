@@ -15,7 +15,18 @@
 # supplement, or renumbering one, is a change to `destination` here and to
 # nothing else.
 
-source(here::here("R", "setup.R"))
+# Anchor on this file's own location, so the script runs from any working
+# directory. here() searches upward from the working directory instead, which
+# is the wrong root when the script is launched by path from elsewhere.
+PROJECT_ROOT <- local({
+  file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
+  if (length(file_arg) == 1) {
+    dirname(dirname(normalizePath(sub("^--file=", "", file_arg))))
+  } else {
+    here::here()
+  }
+})
+source(file.path(PROJECT_ROOT, "R", "setup.R"))
 
 # rule_filter selects rows from a source that covers both motion rules; NA
 # copies the file whole. It is the only column that changes what is written --
@@ -43,7 +54,7 @@ MANIFEST <- tribble(
   "tables/contextual_effects.csv",      "supplement/table_s8.csv",       NA,                            "ALL of contextual_effects.csv: b_between - b_within with its Satterthwaite test, both rules."
 )
 
-source_path <- function(relative) file.path(here("output"), relative)
+source_path <- function(relative) project_path("output", relative)
 destination_path <- function(relative) file.path(MANUSCRIPT_DIR, relative)
 
 missing_sources <- MANIFEST$source[!file.exists(source_path(MANIFEST$source))]
@@ -88,7 +99,7 @@ MANIFEST$rows_written <- unlist(Map(
 
 # Anything in output/ the manifest does not reference. Reported rather than
 # silently dropped, so a new table in output/tables/ cannot go unnoticed.
-all_tables <- list.files(here("output", "tables"), pattern = "[.]csv$")
+all_tables <- list.files(TABLE_DIR, pattern = "[.]csv$")
 unreferenced <- setdiff(all_tables, basename(MANIFEST$source[grepl("^tables/", MANIFEST$source)]))
 
 # ---------------------------------------------------------------------------
