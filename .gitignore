@@ -13,7 +13,9 @@ data/derived/*.rds
 # R opens a default pdf device when the figure code measures grob widths.
 Rplots.pdf
 
-# Not distributed with this repository. Kept out of version control
-# deliberately; do not re-add.
+# Study master sheets. Read by no script here and not needed to reproduce any
+# result. Kept out of version control deliberately; do not re-add.
 data/raw/combined_master_glx_part1.csv
+data/raw/combined_master_glx_part2.csv
 data/raw/CombinedMasterGLX_new_part1.csv
+data/raw/CombinedMasterGLX_new_part2.csv

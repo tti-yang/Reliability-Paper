@@ -54,8 +54,6 @@ drift apart.
 
 ```
 data/raw/          read-only inputs; nothing in this repository produces them
-                   (combined_master_glx_part1.csv is not distributed here --
-                    ask the study team; no script in this repository reads it)
 data/derived/      stage handoff written by 01 (not tracked)
 R/                 shared implementation
 script/            01–05 plus the interactive viewer
@@ -63,6 +61,26 @@ output/tables/     14 CSVs
 output/figures/    Figures 2 and 3 as PDF and PNG, under both motion rules
 manuscript/        rebuilt by 05 (not tracked)
 ```
+
+### Input data
+
+`script/01_prepare_data.R` reads exactly four files from `data/raw/`, and
+stops with the list of any that are absent:
+
+| File | Supplies |
+| --- | --- |
+| `df_mind_all.csv` | Outcome measures, FD 0.5 mm scrubbing pipeline |
+| `df_mind_all_mc04.csv` | Outcome measures, FD 0.4 mm scrubbing pipeline |
+| `motion_exclusion_by_run_5mm.csv` | Run-level motion, keyed to the FD 0.5 mm outcomes |
+| `motion_exclusion_by_run_4mm.csv` | Run-level motion, keyed to the FD 0.4 mm outcomes |
+
+The outcome files and the motion files are both required: the motion files are
+what apply the `fd04_pct10` and `fd05_pct20` rules, so the outcome files alone
+cannot reproduce anything.
+
+The study master sheets (`CombinedMasterGLX_new_part1/2.csv`) are **not** part
+of this repository. No script reads them and they are not needed to reproduce
+any result here; ask the study team if you need them.
 
 ## Manuscript manifest
 
