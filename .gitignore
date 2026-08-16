@@ -1,0 +1,14 @@
+.Rhistory
+.RData
+.Rproj.user/
+.DS_Store
+
+# Derived and rebuilt by script/05_assemble_manuscript.R from output/. Not
+# tracked, because a second committed copy could disagree with output/.
+manuscript/
+
+# Stage handoff, rebuilt in seconds by script/01_prepare_data.R.
+data/derived/*.rds
+
+# R opens a default pdf device when the figure code measures grob widths.
+Rplots.pdf
