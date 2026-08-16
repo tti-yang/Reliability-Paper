@@ -54,6 +54,8 @@ drift apart.
 
 ```
 data/raw/          read-only inputs; nothing in this repository produces them
+                   (combined_master_glx_part1.csv is not distributed here --
+                    ask the study team; no script in this repository reads it)
 data/derived/      stage handoff written by 01 (not tracked)
 R/                 shared implementation
 script/            01–05 plus the interactive viewer
