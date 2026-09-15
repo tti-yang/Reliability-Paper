@@ -1,13 +1,13 @@
 # Packages, project paths, and the constants every stage shares.
 #
-# Sourced first by all five scripts and by the interactive document, so the
+# Sourced first by all six scripts and by the interactive document, so the
 # search path is identical everywhere. The library() order is load-bearing:
 # shiny and tidyverse mask each other in places, and the numbers in output/
 # were produced under this order.
 
 required_packages <- c(
   "here", "shiny", "tidyverse", "lme4", "lmerTest", "patchwork",
-  "flextable", "emmeans", "ggh4x"
+  "flextable", "emmeans", "ggh4x", "parallel"
 )
 missing_packages <- required_packages[
   !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
@@ -39,7 +39,7 @@ library(grid)
 # after a clone and there are no absolute paths anywhere in the repository.
 #
 # PROJECT_ROOT is set by the calling script from its own file location, before
-# this file is sourced -- see the four-line header of any of script/01-05.
+# this file is sourced -- see the four-line header of any of script/01-06.
 # here() cannot do that job on its own: it searches upward from the *working
 # directory*, so `Rscript /path/to/repo/script/01_prepare_data.R` launched from
 # somewhere else anchors on that somewhere else and silently resolves every
@@ -87,6 +87,7 @@ MODEL_TERMS <- c(
 )
 OLDER_ADULT_AGE <- 65
 MAD_THRESHOLD <- 3
+MAGNITUDE_BOOT_SEED <- 20260910L
 
 # The two rules the manuscript reports. `prefix` is used for rule-specific
 # export filenames.

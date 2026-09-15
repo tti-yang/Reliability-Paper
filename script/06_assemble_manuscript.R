@@ -1,4 +1,4 @@
-# 05 - Assemble the manuscript tree from output/.
+# 06 - Assemble the manuscript tree from output/.
 #
 #   reads   output/tables/, output/figures/
 #   writes  manuscript/main/, manuscript/supplement/
@@ -37,6 +37,7 @@ MANIFEST <- tribble(
   # --- main -------------------------------------------------------------
   "figures/figure2_fd04_pct10.png",     "main/figure_2.png",             NA,                            "Between-person age effects, primary motion rule (FD 0.4 mm / 10%).",
   "figures/figure3_fd04_pct10.png",     "main/figure_3.png",             NA,                            "Within-person age effects, primary motion rule.",
+  "figures/figure4_fd04_pct10.png",     "main/figure_4.png",             NA,                            "Between-person component slopes and sign-aligned magnitude comparison, primary rule.",
   "tables/model_estimates.csv",         "main/table_3.csv",              "FD 0.4 mm / 10% (primary)",   "PARTIAL: the primary-rule rows of model_estimates.csv. The liberal-rule rows of the same file are Table S5.",
   "tables/fd04_pct10_interaction_tests.csv", "main/table_4.csv",         NA,                            "Joint age x modality F tests, primary rule.",
   "tables/fd04_pct10_simple_slopes.csv", "main/table_5.csv",             NA,                            "Simple slopes by modality, primary rule.",
@@ -44,6 +45,9 @@ MANIFEST <- tribble(
   # --- supplement -------------------------------------------------------
   "figures/figure2_fd05_pct20.png",     "supplement/figure_s1.png",      NA,                            "Figure 2 under the liberal motion rule (FD 0.5 mm / 20%).",
   "figures/figure3_fd05_pct20.png",     "supplement/figure_s2.png",      NA,                            "Figure 3 under the liberal motion rule.",
+  "figures/figure_s3_fd04_pct10.png",  "supplement/figure_s3.png",      NA,                            "Within-person component slopes and sign-aligned magnitude comparison, primary rule.",
+  "figures/figure_s3_fd05_pct20.png",  "supplement/figure_s4.png",      NA,                            "Within-person component slopes and sign-aligned magnitude comparison, liberal rule.",
+  "figures/figure4_fd05_pct20.png",     "supplement/figure_s5.png",      NA,                            "Figure 4 under the liberal motion rule.",
   "tables/fd04_pct10_demographics.csv", "supplement/table_s1.csv",       NA,                            "Demographics by analytic sample, primary rule.",
   "tables/fd04_pct10_descriptives.csv", "supplement/table_s2.csv",       NA,                            "Descriptive statistics by modality, primary rule.",
   "tables/motion_accounting.csv",       "supplement/table_s3.csv",       NA,                            "Runs assessed and excluded by age group and modality, both rules.",
@@ -51,7 +55,8 @@ MANIFEST <- tribble(
   "tables/model_estimates.csv",         "supplement/table_s5.csv",       "FD 0.5 mm / 20% (liberal)",   "PARTIAL: the liberal-rule rows of model_estimates.csv. The primary-rule rows are Table 3.",
   "tables/fd05_pct20_interaction_tests.csv", "supplement/table_s6.csv",  NA,                            "Joint age x modality F tests, liberal rule.",
   "tables/fd05_pct20_simple_slopes.csv", "supplement/table_s7.csv",      NA,                            "Simple slopes by modality, liberal rule.",
-  "tables/contextual_effects.csv",      "supplement/table_s8.csv",       NA,                            "ALL of contextual_effects.csv: b_between - b_within with its Satterthwaite test, both rules."
+  "tables/contextual_effects.csv",      "supplement/table_s8.csv",       NA,                            "ALL of contextual_effects.csv: b_between - b_within with its Satterthwaite test, both rules.",
+  "tables/magnitude_comparison.csv",    "supplement/table_s9.csv",       NA,                            "ALL of magnitude_comparison.csv: magnitude comparison of the age effects on reliability and confusability, both motion rules."
 )
 
 source_path <- function(relative) project_path("output", relative)
@@ -61,7 +66,7 @@ missing_sources <- MANIFEST$source[!file.exists(source_path(MANIFEST$source))]
 if (length(missing_sources) > 0) {
   stop(
     "Missing sources in output/: ", paste(unique(missing_sources), collapse = ", "),
-    "\nRun script/02_fit_models.R, 03_sensitivity.R and 04_figures.R first."
+    "\nRun script/02_fit_models.R, 03_sensitivity.R, 04_magnitude_comparison.R and 05_figures.R first."
   )
 }
 

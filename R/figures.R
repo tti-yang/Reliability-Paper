@@ -1,4 +1,4 @@
-# Manuscript figures 2 and 3.
+# Manuscript figures 2, 3, and 4.
 #
 # Both figures are one 3 x 4 grid built by the same function, so they cannot
 # drift apart. Measure is the row throughout and the modality average is the
@@ -11,8 +11,8 @@
 # Shared aesthetic mapping for every manuscript figure.
 #
 # Colour encodes the measure and nothing else. Shape encodes the modality
-# column and nothing else. Both scales are defined once here and reused by
-# every panel of every figure; no figure defines its own palette.
+# column in Figures 2-3. Figure 4 uses shapes to distinguish the estimates
+# within each scope. Outcome colours are shared across all three figures.
 # ---------------------------------------------------------------------------
 # The row order and the column order of both figures. The average column is the
 # leftmost column of the same grid, not a separate panel stacked above it. It
@@ -119,6 +119,14 @@ MODALITY_COLUMN_GAP <- 4      # points
 # without tinting any panel: all four panels keep the same white background.
 AVERAGE_DIVIDER_COLOUR <- "grey70"
 AVERAGE_DIVIDER_WIDTH <- 0.5
+
+# Figure 4 is an estimate/interval display rather than a trajectory plot.
+# Keep the outcome colours above; only the new magnitude contrast needs a colour.
+MAGNITUDE_COLOUR <- "grey25"
+FIGURE4_SCOPES <- c("Pooled", "Auditory", "Visual", "Motor")
+FIGURE4_SCOPE_POSITIONS <- c(Pooled = 4, Auditory = 3, Visual = 2, Motor = 1)
+FIGURE4_DODGE <- 0.06
+FIGURE4_HEIGHT_MM <- 85
 
 manuscript_theme <- function(base_size = 9) {
   theme_classic(base_size = base_size) +
@@ -712,6 +720,176 @@ build_figure3 <- function(figure_data) {
     segments = figure_data$points,
     x_scale = scale_x_continuous(breaks = WITHIN_TIME_BREAKS)
   )
+}
+
+# ---------------------------------------------------------------------------
+# Figure 4: component slopes and contrasts, from previously exported estimates.
+# Each row shares explicit x limits across its two patchwork panels. This gives
+# independent between/within ranges without refitting or relying on facet scales.
+# ---------------------------------------------------------------------------
+figure4_plot_data <- function(magnitude, pooled_models, modality_slopes,
+                              rule_label_text) {
+  magnitude <- magnitude %>% filter(motion_rule == rule_label_text)
+  model_intervals <- bind_rows(
+    pooled_models %>%
+      filter(motion_rule == rule_label_text, term %in% AGE_TERMS) %>%
+      transmute(
+        scope = "Pooled", age_term = term, measure = outcome,
+        estimate, conf_low = estimate - qt(.975, df) * se,
+        conf_high = estimate + qt(.975, df) * se
+      ),
+    modality_slopes %>%
+      filter(motion_rule == rule_label_text, age_term %in% AGE_TERMS) %>%
+      transmute(
+        scope = modality, age_term, measure = outcome,
+        estimate = slope, conf_low = lower.CL, conf_high = upper.CL
+      )
+  )
+  stopifnot(
+    nrow(magnitude) == 8L, nrow(model_intervals) == 24L,
+    !anyDuplicated(magnitude[c("scope", "age_term")]),
+    !anyDuplicated(model_intervals[c("scope", "age_term", "measure")]),
+    setequal(magnitude$scope, FIGURE4_SCOPES),
+    setequal(magnitude$age_term, AGE_TERMS),
+    setequal(model_intervals$measure, OUTCOMES),
+    all(abs(magnitude$signed_diff -
+              (magnitude$b_reliability - magnitude$b_confusability)) < 1e-8),
+    all(abs(magnitude$delta -
+              (abs(magnitude$b_reliability) - abs(magnitude$b_confusability))) < 1e-8)
+  )
+
+  components <- magnitude %>%
+    select(scope, age_term, Reliability = b_reliability,
+           Confusability = b_confusability) %>%
+    pivot_longer(all_of(c("Reliability", "Confusability")),
+                 names_to = "measure", values_to = "estimate") %>%
+    left_join(model_intervals, by = c("scope", "age_term", "measure"),
+              suffix = c("", "_model"))
+  stopifnot(all(abs(components$estimate - components$estimate_model) < 1e-8))
+
+  # Reverse the model estimate and BOTH interval endpoints, swapping their
+  # order: [lo, hi] becomes [-hi, -lo]. The fitted distinctiveness slope is a
+  # model approximation to the component difference, not an exact identity.
+  result <- bind_rows(
+    components %>% select(-estimate_model) %>% mutate(column = "Components"),
+    model_intervals %>% filter(measure == "Distinctiveness") %>%
+      mutate(reversed_low = -conf_high, reversed_high = -conf_low) %>%
+      transmute(scope, age_term, measure, estimate = -estimate,
+                conf_low = reversed_low, conf_high = reversed_high,
+                column = "Contrasts"),
+    magnitude %>% transmute(
+      scope, age_term, measure = "Delta", estimate = delta,
+      conf_low = delta_ci_lo, conf_high = delta_ci_hi, column = "Contrasts"
+    )
+  )
+  counts <- result %>% count(age_term, column, scope)
+  stopifnot(
+    nrow(result) == 32L, nrow(counts) == 16L, all(counts$n == 2L),
+    !anyNA(result),
+    all(is.finite(as.matrix(result[c("estimate", "conf_low", "conf_high")]))),
+    all(result$conf_low <= result$conf_high)
+  )
+  result
+}
+
+figure4_panel <- function(data, x_limits, title, x_label, labels) {
+  colours <- c(MEASURE_COLOURS, Delta = MAGNITUDE_COLOUR)
+  shapes <- c(Reliability = 16, Confusability = 17,
+              Distinctiveness = 23, Delta = 15)
+  data <- data %>% mutate(
+    y = unname(FIGURE4_SCOPE_POSITIONS[scope]) +
+      if_else(measure %in% c("Reliability", "Distinctiveness"),
+              FIGURE4_DODGE, -FIGURE4_DODGE),
+    interval_type = if_else(measure == "Delta", "Bootstrap percentile", "Model-based")
+  )
+  # Match endpoints by scope, rather than relying on the order of the rows.
+  connectors <- data %>% filter(measure == "Distinctiveness") %>%
+    select(scope, x = estimate, y) %>%
+    inner_join(data %>% filter(measure == "Delta") %>%
+                 select(scope, xend = estimate, yend = y), by = "scope")
+
+  ggplot(data, aes(estimate, y, colour = measure, shape = measure)) +
+    geom_vline(xintercept = 0, colour = "grey65", linewidth = 0.3) +
+    geom_hline(yintercept = 3.5, colour = "grey85", linewidth = 0.25) +
+    geom_segment(data = connectors, aes(x = x, y = y, xend = xend, yend = yend),
+                 inherit.aes = FALSE, colour = "grey75", linewidth = 0.3) +
+    geom_segment(aes(x = conf_low, xend = conf_high, yend = y,
+                     linetype = interval_type),
+                 linewidth = 0.5, show.legend = FALSE) +
+    geom_point(size = 2.2, stroke = POINT_STROKE, fill = "white",
+               show.legend = TRUE) +
+    scale_colour_manual(values = colours, limits = names(colours), labels = labels,
+                        drop = FALSE) +
+    scale_shape_manual(values = shapes, limits = names(colours), labels = labels,
+                       drop = FALSE) +
+    scale_linetype_manual(values = c("Model-based" = "solid",
+                                    "Bootstrap percentile" = "22"), guide = "none") +
+    scale_y_continuous(
+      breaks = unname(FIGURE4_SCOPE_POSITIONS), labels = FIGURE4_SCOPES,
+      limits = c(.76, 4.24), expand = expansion(mult = 0)
+    ) +
+    scale_x_continuous(limits = x_limits, expand = expansion(mult = .04),
+                       labels = scales::label_number()) +
+    labs(title = title, x = x_label, y = NULL, colour = NULL, shape = NULL) +
+    guides(colour = guide_legend(nrow = 2, byrow = TRUE),
+           shape = guide_legend(nrow = 2, byrow = TRUE)) +
+    manuscript_theme() +
+    theme(
+      plot.title = element_text(size = 9, face = "plain", hjust = 0),
+      axis.title = element_text(size = 9),
+      legend.position = "bottom",
+      legend.text = element_text(size = 7),
+      legend.key.height = unit(7, "pt"),
+      legend.key.width = unit(10, "pt"),
+      legend.key.spacing.y = unit(0, "pt"),
+      legend.margin = margin(0, 0, 0, 0),
+      legend.box.spacing = unit(2, "pt")
+    )
+}
+
+build_magnitude_figure <- function(figure_data, age_term) {
+  stopifnot(length(age_term) == 1L, age_term %in% AGE_TERMS)
+  labels <- c("Reliability", "Confusability",
+              "Signed difference (sign reversed)",
+              "Magnitude contrast")
+  row <- figure_data %>% filter(.data$age_term == .env$age_term)
+  stopifnot(nrow(row) == 16L)
+  x_limits <- range(c(0, row$estimate, row$conf_low, row$conf_high))
+  age_label <- if (age_term == "between_cAge") "Between-person" else "Within-person"
+  panels <- lapply(c("Components", "Contrasts"), function(column_name) {
+    figure4_panel(
+      row %>% filter(column == column_name), x_limits,
+      paste(age_label, tolower(column_name)),
+      if (column_name == "Contrasts") {
+        "Excess age effect on reliability (per year)"
+      } else paste(age_label, "age slope (per year)"),
+      labels
+    )
+  })
+  built <- lapply(panels, ggplot_build)
+  stopifnot(identical(built[[1]]$layout$panel_params[[1]]$x.range,
+                      built[[2]]$layout$panel_params[[1]]$x.range))
+  wrap_plots(panels, nrow = 1, ncol = 2) +
+    plot_layout(guides = "collect") +
+    plot_annotation(
+      caption = paste(
+        "95% CIs: solid = model-based; dashed = bootstrap percentile.",
+        "Green point and CI: negated distinctiveness-model estimate."
+      ),
+      theme = theme(plot.caption = element_text(
+        size = 6, hjust = 0, margin = margin(t = 2, b = 0)
+      ))
+    ) & theme(legend.position = "bottom")
+}
+
+# Main Figure 4 contains only the between-person age effects.
+build_figure4 <- function(figure_data) {
+  build_magnitude_figure(figure_data, "between_cAge")
+}
+
+# The within-person effects retain the identical two-panel layout in Figure S3.
+build_figure_s3 <- function(figure_data) {
+  build_magnitude_figure(figure_data, "within_cAge")
 }
 
 # ---------------------------------------------------------------------------

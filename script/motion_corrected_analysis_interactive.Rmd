@@ -12,11 +12,12 @@ runtime: shiny
 ```{r setup, include=FALSE}
 # The pipeline lives in R/ and is shared with the numbered scripts in script/,
 # so this viewer and the files in output/ cannot drift apart. Nothing in this
-# document writes to disk; script/01..05 do that.
+# document writes to disk; script/01..06 do that.
 source(here::here("R", "setup.R"))
 source(here("R", "data.R"))
 source(here("R", "models.R"))
 source(here("R", "sensitivity.R"))
+source(here("R", "magnitude.R"))
 source(here("R", "figures.R"))
 
 knitr::opts_chunk$set(
@@ -566,6 +567,84 @@ renderTable({
 }, striped = TRUE, bordered = TRUE, spacing = "s")
 ```
 
+# Magnitude of the age effects
+
+The magnitude contrast, $\Delta = |b_{\mathrm{reliability}}| -
+|b_{\mathrm{confusability}}|$, asks which component is more strongly associated
+with age on their shared correlation scale; positive values indicate a larger
+absolute reliability slope. Unlike the signed component difference, it does
+not become large merely because the slopes point in opposite directions.
+Motor cortex illustrates this: opposite signs and comparable between-person
+magnitudes accompany a steep distinctiveness slope but a magnitude contrast
+near zero.
+
+The point estimates below follow the FD and percentage controls because only
+four model fits are needed. The bootstrap intervals and p values are precomputed
+for the two manuscript rules only and do not respond to the controls; refitting
+thousands of participant resamples would be too slow for interactive use.
+The signed difference is computed from the two component models; it need not
+exactly equal the coefficient from a separate distinctiveness mixed model,
+which estimates its own variance components.
+
+```{r magnitude-data, include=FALSE}
+selected_magnitude <- reactive({
+  component_magnitude_estimates(analysis_data())
+})
+
+# Read precomputed inference once; never run or save a bootstrap in the viewer.
+magnitude_path <- file.path(TABLE_DIR, "magnitude_comparison.csv")
+precomputed_magnitude <- if (file.exists(magnitude_path)) {
+  readr::read_csv(magnitude_path, num_threads = 1, show_col_types = FALSE)
+} else NULL
+```
+
+## Point estimates for the selected rule
+
+```{r magnitude-point-table}
+renderTable({
+  selected_magnitude() %>%
+    mutate(across(c(b_reliability, b_confusability, signed_diff, delta),
+                  ~ sprintf("%.5f", .x)))
+}, striped = TRUE, bordered = TRUE, spacing = "s")
+```
+
+## Bootstrap comparison for both manuscript rules
+
+These are the saved manuscript-rule results, independent of the controls above.
+`n_boot_ok` gives the number of usable draws; a bootstrap p value of zero means
+that no usable resample crossed zero, rather than an exactly zero probability.
+
+```{r magnitude-bootstrap-table}
+renderUI({
+  if (is.null(precomputed_magnitude)) {
+    return(helpText(paste(
+      "Bootstrap results are not available yet.",
+      "Run script/04_magnitude_comparison.R to compute them."
+    )))
+  }
+  htmltools::tagList(lapply(MOTION_RULES, function(rule) {
+    table <- precomputed_magnitude %>%
+      filter(motion_rule == rule$label) %>%
+      transmute(
+        Scope = scope, `Age term` = age_term,
+        `Reliability b` = sprintf("%.5f", b_reliability),
+        `Confusability b` = sprintf("%.5f", b_confusability),
+        `Signed difference` = sprintf("%.5f", signed_diff),
+        Delta = sprintf("%.5f", delta),
+        `95% percentile CI` = sprintf("[%.5f, %.5f]", delta_ci_lo, delta_ci_hi),
+        `Bootstrap p` = format_p(boot_p), n_boot_ok
+      )
+    htmltools::tagList(
+      htmltools::tags$h4(rule$label),
+      htmltools::HTML(knitr::kable(
+        table, format = "html", row.names = FALSE,
+        table.attr = "class='table table-striped table-bordered'"
+      ))
+    )
+  }))
+})
+```
+
 # Contextual effect: do the within- and between-person age slopes differ?
 
 The main models estimate a within-person slope (`within_cAge`) and a
@@ -713,14 +792,14 @@ renderUI({
 # Exported numbers for the manuscript
 
 This document writes nothing. The tables the manuscript needs are written to
-`output/tables/` by `script/02_fit_models.R` and `script/03_sensitivity.R`,
-and the figures to `output/figures/` by `script/04_figures.R`. Those scripts
-and this viewer call the same functions in `R/`, so the numbers shown below
+`output/tables/` by `script/02_fit_models.R`, `script/03_sensitivity.R`, and
+`script/04_magnitude_comparison.R`, and the figures to `output/figures/` by
+`script/05_figures.R`. Those scripts and this viewer call the same functions in `R/`, so the numbers shown below
 are the numbers in those files.
 
 # Manuscript figures
 
-Figures 2 and 3 are static, publication-ready files. `script/04_figures.R`
+Figures 2 and 3 are static, publication-ready files. `script/05_figures.R`
 writes both under both motion rules to `output/figures/`, with the rule in the
 filename: `figure2_fd04_pct10.png` is the primary rule and
 `figure2_fd05_pct20.png` the liberal one, which is the supplementary figure.
@@ -785,7 +864,7 @@ identity comes from the strip labels, and the statistics belong in Table 3 and
 the manuscript text.
 
 ```{r manuscript-figures, include=FALSE}
-# Built for display only; script/04_figures.R writes the files.
+# Built for display only; script/05_figures.R writes the files.
 manuscript_figures <- lapply(MOTION_RULES, function(rule) {
   rule_data <- analysis_data_by_rule[[rule$key]]
   rule_models <- fit_outcome_models(rule_data)

@@ -3,7 +3,7 @@
 .Rproj.user/
 .DS_Store
 
-# Derived and rebuilt by script/05_assemble_manuscript.R from output/. Not
+# Derived and rebuilt by script/06_assemble_manuscript.R from output/. Not
 # tracked, because a second committed copy could disagree with output/.
 manuscript/
 
@@ -19,3 +19,9 @@ data/raw/combined_master_glx_part1.csv
 data/raw/combined_master_glx_part2.csv
 data/raw/CombinedMasterGLX_new_part1.csv
 data/raw/CombinedMasterGLX_new_part2.csv
+
+# Claude Code local tooling config (machine-specific absolute paths).
+.claude/
+
+# R.app console history, written wherever a session happens to load a file.
+.Rapp.history

@@ -171,13 +171,14 @@ build_analysis_data <- function(fd_cutoff, pct_cutoff) {
 }
 
 # ---------------------------------------------------------------------------
-# The handoff between stages. 01_prepare_data.R writes these; 02-04 read them
-# and never touch data/raw/ again.
+# The handoff between stages. 01 writes analytic data; 02 writes the prepared
+# Figure 2-3 data so 05 can render figures without fitting models.
 # ---------------------------------------------------------------------------
 DERIVED_FILES <- c(
   analysis_data_by_rule = "analysis_data_by_rule.rds",
   run_flags_by_rule = "run_flags_by_rule.rds",
-  subject_age_groups = "subject_age_groups.rds"
+  subject_age_groups = "subject_age_groups.rds",
+  figure_data_by_rule = "figure_data_by_rule.rds"
 )
 
 save_derived <- function(objects) {
@@ -191,7 +192,10 @@ save_derived <- function(objects) {
 read_derived <- function(name) {
   path <- file.path(DERIVED_DATA_DIR, DERIVED_FILES[[name]])
   if (!file.exists(path)) {
-    stop("Missing ", path, ". Run script/01_prepare_data.R first.")
+    producer <- if (name == "figure_data_by_rule") {
+      "script/02_fit_models.R"
+    } else "script/01_prepare_data.R"
+    stop("Missing ", path, ". Run ", producer, " first.")
   }
   readRDS(path)
 }

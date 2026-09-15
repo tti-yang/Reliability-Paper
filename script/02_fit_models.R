@@ -8,6 +8,7 @@
 #           output/tables/motion_accounting.csv
 #           output/tables/model_estimates.csv
 #           output/tables/contextual_effects.csv
+#           data/derived/figure_data_by_rule.rds (Figures 2-3, no plot objects)
 #
 # demographics and descriptives are rule-specific and are therefore prefixed
 # with the motion rule; the rest carry a motion_rule column and cover both
@@ -27,6 +28,7 @@ PROJECT_ROOT <- local({
 source(file.path(PROJECT_ROOT, "R", "setup.R"))
 source(file.path(PROJECT_ROOT, "R", "data.R"))
 source(file.path(PROJECT_ROOT, "R", "models.R"))
+source(file.path(PROJECT_ROOT, "R", "figures.R"))
 
 analysis_data_by_rule <- read_derived("analysis_data_by_rule")
 run_flags_by_rule <- read_derived("run_flags_by_rule")
@@ -76,3 +78,20 @@ for (filename in names(export_tables)) {
   ))
 }
 message("Wrote ", length(export_tables), " tables to ", TABLE_DIR)
+
+# Prepare the existing model-based figure data here. Stage 05 only renders;
+# neither model fitting nor bootstrap inference belongs in the export stage.
+figure_data_by_rule <- setNames(lapply(MOTION_RULES, function(rule) {
+  data <- analysis_data_by_rule[[rule$key]]
+  models <- fit_outcome_models(data)
+  interaction_models <- interaction_results_by_rule[[rule$key]]$models
+  figure2 <- figure2_plot_data(data, models, interaction_models)
+  figure3 <- figure3_plot_data(data, models, interaction_models)
+  list(
+    figure2 = figure2,
+    figure3 = figure3,
+    figure2_average = figure2_average_check(data, figure2$points),
+    figure3_average = figure3_average_check(data, figure3$points)
+  )
+}), rule_keys())
+message("Wrote ", save_derived(list(figure_data_by_rule = figure_data_by_rule)))
