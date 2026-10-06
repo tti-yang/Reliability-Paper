@@ -135,21 +135,27 @@ count_missing_motion_records <- function(fd_cutoff, pct_cutoff) {
 }
 
 add_age_decomposition <- function(data) {
-  data %>%
+  # A retained session contributes once, regardless of surviving modalities.
+  sessions <- data %>%
+    distinct(SubNum, Wave_Num, Age_DuringParticipation_)
+  if (anyNA(sessions) || anyDuplicated(sessions[c("SubNum", "Wave_Num")])) {
+    stop("Each retained participant-wave must have one nonmissing session age.")
+  }
+  session_ages <- sessions %>%
     group_by(SubNum) %>%
     mutate(
-      n_waves = n_distinct(Wave_Num),
-      mean_age = if_else(
-        n_waves > 1,
-        mean(Age_DuringParticipation_, na.rm = TRUE),
-        Age_DuringParticipation_
-      ),
-      within_cAge = if_else(
-        n_waves > 1,
-        Age_DuringParticipation_ - mean_age,
-        0
-      ),
-      between_cAge = mean_age - OLDER_ADULT_AGE,
+      n_waves = n(),
+      person_mean_age = mean(Age_DuringParticipation_),
+      mean_age = person_mean_age, # Preserve the existing downstream column.
+      within_cAge = Age_DuringParticipation_ - person_mean_age,
+      between_cAge = person_mean_age - OLDER_ADULT_AGE
+    ) %>%
+    ungroup()
+  result <- data %>%
+    select(-any_of(c("n_waves", "person_mean_age", "mean_age",
+                    "within_cAge", "between_cAge"))) %>%
+    left_join(session_ages, by = c("SubNum", "Wave_Num", "Age_DuringParticipation_")) %>%
+    mutate(
       aud_mot = case_when(
         Modality == "Aud" ~ -1,
         Modality == "Mot" ~ 1,
@@ -160,8 +166,32 @@ add_age_decomposition <- function(data) {
         Modality == "Vis" ~ 1,
         TRUE ~ 0
       )
-    ) %>%
-    ungroup()
+    )
+  stopifnot(nrow(result) == nrow(data))
+  validate_age_decomposition(result)
+  result
+}
+
+validate_age_decomposition <- function(data, tolerance = 1e-10) {
+  sessions <- data %>%
+    distinct(SubNum, Wave_Num, Age_DuringParticipation_, person_mean_age,
+             mean_age, n_waves, between_cAge, within_cAge)
+  # Also enforces identical age quantities across modalities within a session.
+  stopifnot(!anyNA(sessions),
+            !anyDuplicated(sessions[c("SubNum", "Wave_Num")]))
+  people <- sessions %>% group_by(SubNum) %>% summarise(
+    equal_wave_mean = mean(Age_DuringParticipation_),
+    error = max(abs(person_mean_age - equal_wave_mean)),
+    within_sum = sum(within_cAge),
+    wave_count_ok = all(n_waves == n()), .groups = "drop")
+  stopifnot(all(people$error < tolerance),
+            all(abs(people$within_sum) < tolerance), all(people$wave_count_ok),
+            all(abs(sessions$mean_age - sessions$person_mean_age) < tolerance),
+            all(abs(sessions$between_cAge - (sessions$person_mean_age - 65)) < tolerance),
+            all(abs(sessions$within_cAge -
+                    (sessions$Age_DuringParticipation_ - sessions$person_mean_age)) < tolerance),
+            all(sessions$within_cAge[sessions$n_waves == 1] == 0))
+  invisible(TRUE)
 }
 
 build_analysis_data <- function(fd_cutoff, pct_cutoff) {

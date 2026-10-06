@@ -1,0 +1,13 @@
+Figure S1. Model-implied age effects on neural distinctiveness, reliability
+and confusability under FD 0.5 mm / 20% (liberal). Each panel plots change
+from a reference rather than a level: every series is shifted by its own
+fitted value at age 65 in the between-person column, and at the first wave in
+the within-person column, so all series pass through zero there. Colour
+encodes modality; the pooled series is the heavier near-black line. Ribbon:
+95% CI of the model-implied change from the reference, zero width at the
+reference by construction. Dashed segments span the unsampled age range
+between the young and older samples. Within-person modality lines are shown
+descriptively and at reduced weight, because the within-person age x modality
+interaction was not significant for any outcome (distinctiveness F(2, 631.4)
+= 1.27, p = 0.281; reliability F(2, 623.8) = 1.63, p = 0.196; confusability
+F(2, 661.8) = 0.86, p = 0.423).

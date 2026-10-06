@@ -1,0 +1,1 @@
+PASS: all 22 raw-input/manuscript file SHA-256 hashes match the pre-correction snapshot.

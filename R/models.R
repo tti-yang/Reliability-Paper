@@ -83,6 +83,21 @@ fit_interaction_models <- function(data) {
   )
 }
 
+# VISUALIZATION ONLY: different colored slopes in Figures 2/S1.
+# No interaction tests, simple-slope inference, or manuscript conclusions are
+# obtained from these fits. Pooled inference always uses fit_outcome_models().
+fit_visualization_models <- function(data) {
+  previous_contrasts <- options(contrasts = INTERACTION_CONTRASTS)
+  on.exit(options(previous_contrasts), add = TRUE)
+  setNames(lapply(OUTCOMES, function(outcome) {
+    model_data <- prepare_interaction_data(data) %>%
+      drop_na(all_of(c(outcome, AGE_TERMS, "Sex_M1", "Education", "SubNum", "Modality")))
+    lme4::lmer(reformulate(c("(between_cAge + within_cAge) * Modality",
+                            "Sex_M1", "Education", "(1 | SubNum)"),
+                          response = outcome), data = model_data, REML = FALSE)
+  }), OUTCOMES)
+}
+
 interaction_tests_table <- function(interaction_models) {
   map_dfr(OUTCOMES, function(outcome) {
     # lmerTest's anova() is Type III with Satterthwaite denominator df.
@@ -252,6 +267,8 @@ contextual_effects_table <- function(data, rule_label_text) {
 # Table builders for output/tables/.
 # ---------------------------------------------------------------------------
 sample_definitions <- function(data) {
+  # Manuscript groups are Wave-1-anchored. A participant retained only at Wave 2
+  # remains in the analytic models but is deliberately absent from these groups.
   returner_ids <- data %>%
     distinct(SubNum, Wave_Num) %>%
     count(SubNum, name = "n_retained_waves") %>%
@@ -376,14 +393,15 @@ motion_accounting_export <- function(run_flags_by_rule, subject_age_groups) {
   })
 }
 
-model_estimates_export <- function(analysis_data_by_rule) {
+model_estimates_export <- function(analysis_data_by_rule, models_by_rule = NULL) {
   map_dfr(MOTION_RULES, function(rule) {
     data <- analysis_data_by_rule[[rule$key]]
-    outcome_models <- fit_outcome_models(data)
+    outcome_models <- if (is.null(models_by_rule)) fit_outcome_models(data) else
+      models_by_rule[[rule$key]]
 
     map_dfr(OUTCOMES, function(outcome) {
       model <- outcome_models[[outcome]]
-      summary(model)$coefficients %>%
+      summary(model, ddf = "Satterthwaite")$coefficients %>%
         as.data.frame() %>%
         rownames_to_column("term") %>%
         as_tibble() %>%
@@ -399,6 +417,25 @@ model_estimates_export <- function(analysis_data_by_rule) {
           n_observations = nrow(model@frame),
           n_participants = n_distinct(model@frame$SubNum)
         )
+    })
+  })
+}
+
+# The pooled age slopes with their standard errors and Satterthwaite df, in the
+# same shape as model_estimates.csv. The figure stage reads that CSV; the
+# interactive document already has the fitted models to hand and uses this.
+pooled_slope_table <- function(models, rule_label_text) {
+  map_dfr(names(models), function(outcome) {
+    coefficients <- summary(models[[outcome]])$coefficients
+    map_dfr(AGE_TERMS, function(term) {
+      tibble(
+        motion_rule = rule_label_text,
+        outcome = outcome,
+        term = term,
+        estimate = coefficients[term, "Estimate"],
+        se = coefficients[term, "Std. Error"],
+        df = coefficients[term, "df"]
+      )
     })
   })
 }
@@ -460,4 +497,51 @@ format_contextual_effects <- function(table) {
       p = format_p(p),
       `Slopes differ` = if_else(p < .05, "Yes", "No")
     )
+}
+
+# ---------------------------------------------------------------------------
+# APA table presentation for the interactive document.
+#
+# These render the flextables the viewer shows for demographics and
+# descriptives. They write nothing; they return a flextable and an htmltools
+# tag list respectively.
+# ---------------------------------------------------------------------------
+style_apa_table <- function(ft) {
+  ft %>%
+    theme_booktabs() %>%
+    font(fontname = "Times New Roman", part = "all") %>%
+    fontsize(size = 11, part = "all") %>%
+    bold(part = "header") %>%
+    align(align = "center", part = "all") %>%
+    align(j = 1, align = "left", part = "all") %>%
+    padding(padding = 4, part = "all") %>%
+    autofit()
+}
+
+# The note line names the motion rule the table was built under. In the viewer
+# that rule is a Shiny reactive, so it is passed in rather than read from the
+# calling environment, which is what let this function live in the document.
+apa_table_html <- function(heading, title, note, ft, rule_label_text) {
+  htmltools::tagList(
+    htmltools::tags$p(
+      htmltools::tags$strong(heading),
+      style = "font-family: 'Times New Roman'; margin-bottom: 0;"
+    ),
+    htmltools::tags$p(
+      htmltools::tags$em(title),
+      style = paste(
+        "font-family: 'Times New Roman';",
+        "font-size: 1.05em; margin-top: 0;"
+      )
+    ),
+    flextable::htmltools_value(ft),
+    htmltools::tags$p(
+      htmltools::tags$em("Note. "),
+      paste0(note, " Selected rule: ", rule_label_text, "."),
+      style = paste(
+        "font-family: 'Times New Roman';",
+        "font-size: 0.95em; margin-top: 8px;"
+      )
+    )
+  )
 }

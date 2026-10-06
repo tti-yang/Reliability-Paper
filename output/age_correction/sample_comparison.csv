@@ -1,0 +1,15 @@
+rule,statistic,old,corrected,difference,changed
+primary,observations,724,724,0,FALSE
+primary,sessions,276,276,0,FALSE
+primary,participants,218,218,0,FALSE
+primary,returners,58,58,0,FALSE
+primary,wave1_sessions,217,217,0,FALSE
+primary,wave2_sessions,59,59,0,FALSE
+primary,wave2_only_participants,1,1,0,FALSE
+liberal,observations,841,841,0,FALSE
+liberal,sessions,286,286,0,FALSE
+liberal,participants,226,226,0,FALSE
+liberal,returners,60,60,0,FALSE
+liberal,wave1_sessions,226,226,0,FALSE
+liberal,wave2_sessions,60,60,0,FALSE
+liberal,wave2_only_participants,0,0,0,FALSE

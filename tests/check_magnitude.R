@@ -7,6 +7,7 @@ source(file.path(PROJECT_ROOT, "R", "setup.R"))
 source(file.path(PROJECT_ROOT, "R", "data.R"))
 source(file.path(PROJECT_ROOT, "R", "models.R"))
 source(file.path(PROJECT_ROOT, "R", "magnitude.R"))
+fit_interaction_model <- function(...) stop("Pooled bootstrap attempted an interaction fit")
 
 data <- read_derived("analysis_data_by_rule")$primary
 expect_error <- function(expression, pattern) {
@@ -40,18 +41,18 @@ set.seed(33)
 previous_seed <- .Random.seed
 previous_kind <- RNGkind()
 previous_contrasts <- getOption("contrasts")
-serial <- suppressWarnings(magnitude_contrast(data, B = 12, cores = 1))
+serial <- suppressWarnings(magnitude_contrast(data, B = 12, cores = 1, pooled_only = TRUE))
 stopifnot(identical(previous_seed, .Random.seed),
           identical(previous_kind, RNGkind()),
           identical(previous_contrasts, getOption("contrasts")))
-parallel_result <- suppressWarnings(magnitude_contrast(data, B = 12, cores = 2))
+parallel_result <- suppressWarnings(magnitude_contrast(data, B = 12, cores = 2, pooled_only = TRUE))
 stopifnot(identical(serial, parallel_result),
           identical(previous_seed, .Random.seed),
           identical(previous_kind, RNGkind()),
           identical(previous_contrasts, getOption("contrasts")))
-point <- component_magnitude_estimates(data)
+point <- component_magnitude_estimates(data, pooled_only = TRUE)
 stopifnot(identical(serial[names(point)], point),
-          nrow(serial) == 8L,
+          nrow(serial) == 2L,
           all(serial$delta_ci_lo <= serial$delta_ci_hi),
           all(serial$boot_p >= 0 & serial$boot_p <= 1))
 
@@ -62,7 +63,7 @@ fit_component_pair <- function(data, interaction = FALSE, bootstrap = FALSE) {
   original_fitter(data, interaction, bootstrap)
 }
 warnings <- character()
-failed <- withCallingHandlers(magnitude_contrast(data, B = 2, cores = 1),
+failed <- withCallingHandlers(magnitude_contrast(data, B = 2, cores = 1, pooled_only = TRUE),
   warning = function(w) {
     warnings <<- c(warnings, conditionMessage(w))
     invokeRestart("muffleWarning")

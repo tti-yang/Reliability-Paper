@@ -1,0 +1,12 @@
+Figure 3. Pooled magnitude contrast of the age effects on reliability and
+confusability under FD 0.4 mm / 10% (primary). Points are delta = |b_R| -
+|b_C|, where b_R is the age slope for reliability and b_C the corresponding
+slope for confusability, both per year on the original correlation scale.
+delta is sign-free: a positive value means the age effect is larger in
+magnitude for reliability, whichever direction either component points in.
+Intervals are 95% bootstrap percentile intervals from a cluster bootstrap
+over participants (B = 5,000 draws). The intervals are asymmetric about their
+points because the absolute confusability slope is biased upward when the
+true slope is near zero, which shifts the bootstrap distribution of the
+contrast toward zero; the point estimates therefore sit above the centre of
+their intervals, and the intervals are conservative.

@@ -1,0 +1,2 @@
+Subject,SubNum,Age_DuringParticipation_,Subgroup,Wave_Num,Sex_M1,Education,Modality,Distinctiveness,Reliability,Confusability,pct_excluded,exclude,n_waves,person_mean_age,mean_age,within_cAge,between_cAge,aud_mot,aud_vis
+mindb118,118,75,1,2,2,18,Aud,0.597452979040963,0.618509808049469,0.0210568290085052,0.5556,FALSE,1,75,75,0,10,-1,-1

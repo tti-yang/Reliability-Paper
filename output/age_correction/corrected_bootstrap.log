@@ -1,0 +1,32 @@
+Magnitude comparison: B = 5000, seed = 20260910, cores = 8
+Read analysis_data_by_rule.rds and the stage-02 slope tables
+
+FD 0.4 mm / 10% (primary): identical samples (724 rows, 218 participants); component export checks passed.
+# A tibble: 2 × 5
+  scope  age_term     signed_diff distinctiveness_slope  difference
+  <chr>  <chr>              <dbl>                 <dbl>       <dbl>
+1 Pooled between_cAge    -0.00309              -0.00308 -0.00000680
+2 Pooled within_cAge     -0.0102               -0.00922 -0.000977  
+
+FD 0.5 mm / 20% (liberal): identical samples (841 rows, 226 participants); component export checks passed.
+# A tibble: 2 × 5
+  scope  age_term     signed_diff distinctiveness_slope difference
+  <chr>  <chr>              <dbl>                 <dbl>      <dbl>
+1 Pooled between_cAge    -0.00324              -0.00329  0.0000460
+2 Pooled within_cAge     -0.00930              -0.00915 -0.000155 
+
+Bootstrapping FD 0.4 mm / 10% (primary)
+FD 0.4 mm / 10% (primary): 740 of 5000 draws had a singular component fit (14.8%), all retained.
+
+Bootstrapping FD 0.5 mm / 20% (liberal)
+FD 0.5 mm / 20% (liberal): 1646 of 5000 draws had a singular component fit (32.9%), all retained.
+
+Completed B = 5000, seed = 20260910 in 123.0 seconds.
+# A tibble: 4 × 4
+  motion_rule               scope  age_term     n_boot_ok
+  <chr>                     <chr>  <chr>            <int>
+1 FD 0.4 mm / 10% (primary) Pooled between_cAge      5000
+2 FD 0.4 mm / 10% (primary) Pooled within_cAge       5000
+3 FD 0.5 mm / 20% (liberal) Pooled between_cAge      5000
+4 FD 0.5 mm / 20% (liberal) Pooled within_cAge       5000
+Wrote /Users/ttiyang/Library/CloudStorage/OneDrive-Umich/Projects/MiND/Git/Reliability-Paper/output/tables/magnitude_comparison.csv

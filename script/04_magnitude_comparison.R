@@ -1,8 +1,9 @@
 # 04 - Compare the magnitudes of reliability and confusability age slopes.
 #
 #   reads   data/derived/analysis_data_by_rule.rds
-#           output/tables/model_estimates.csv, {rule}_simple_slopes.csv
+#           output/tables/model_estimates.csv
 #   writes  output/tables/magnitude_comparison.csv
+#           data/derived/magnitude_bootstrap_by_rule.rds (draws and diagnostics)
 
 # Anchor on this file's own location, so the script runs from any working
 # directory. here() searches upward from the working directory instead, which
@@ -20,16 +21,19 @@ source(file.path(PROJECT_ROOT, "R", "data.R"))
 source(file.path(PROJECT_ROOT, "R", "models.R"))
 source(file.path(PROJECT_ROOT, "R", "magnitude.R"))
 
-B <- suppressWarnings(as.numeric(Sys.getenv("MIND_BOOT_B", "5000")))
+B <- suppressWarnings(as.numeric(
+  Sys.getenv("MIND_BOOT_B", as.character(MAGNITUDE_BOOT_DRAWS))
+))
 if (length(B) != 1L || !is.finite(B) || B < 1 || B != floor(B) ||
     B > .Machine$integer.max) {
   stop("MIND_BOOT_B must be a positive integer.")
 }
 cores <- magnitude_boot_cores()
 started <- proc.time()[["elapsed"]]
-message("Magnitude comparison: B = ", B, ", seed = ", MAGNITUDE_BOOT_SEED,
-        ", cores = ", cores)
+detail("Magnitude comparison: B = ", B, ", seed = ", MAGNITUDE_BOOT_SEED,
+       ", cores = ", cores)
 analysis_data_by_rule <- read_derived("analysis_data_by_rule")
+message("Read ", DERIVED_FILES[["analysis_data_by_rule"]], " and the stage-02 slope tables")
 
 read_reference <- function(filename) {
   path <- file.path(TABLE_DIR, filename)
@@ -53,22 +57,17 @@ for (rule in MOTION_RULES) {
   stopifnot(all(is.finite(data$Distinctiveness)),
             all(abs(data$Reliability - data$Confusability -
                       data$Distinctiveness) < 1e-8))
-  point <- component_magnitude_estimates(data)
-  reference <- bind_rows(
-    pooled_reference %>%
-      filter(motion_rule == rule$label, term %in% AGE_TERMS) %>%
-      transmute(scope = "Pooled", age_term = term, outcome, slope = estimate),
-    read_reference(paste0(rule$prefix, "_simple_slopes.csv")) %>%
-      filter(motion_rule == rule$label, age_term %in% AGE_TERMS) %>%
-      transmute(scope = modality, age_term, outcome, slope)
-  )
-  stopifnot(nrow(reference) == 24L,
+  point <- component_magnitude_estimates(data, pooled_only = TRUE)
+  reference <- pooled_reference %>%
+    filter(motion_rule == rule$label, term %in% AGE_TERMS) %>%
+    transmute(scope = "Pooled", age_term = term, outcome, slope = estimate)
+  stopifnot(nrow(reference) == 6L,
             !anyDuplicated(reference[c("scope", "age_term", "outcome")]))
   reference <- reference %>%
     pivot_wider(names_from = outcome, values_from = slope)
   comparison <- left_join(point, reference, by = c("scope", "age_term"))
   # Same model, same component: these equalities hold for separate mixed fits.
-  stopifnot(nrow(comparison) == 8L,
+  stopifnot(nrow(comparison) == 2L,
             all(is.finite(as.matrix(comparison[-c(1, 2)]))),
             all(abs(comparison$b_reliability - comparison$Reliability) < 1e-8),
             all(abs(comparison$b_confusability - comparison$Confusability) < 1e-8))
@@ -77,46 +76,35 @@ for (rule in MOTION_RULES) {
   # Outcome additivity does NOT force coefficient additivity when each model
   # estimates its own variance components. Report this discrepancy explicitly;
   # forcing equality would change the manuscript's component specifications.
-  message("\n", rule$label, ": identical samples (", nrow(data), " rows, ",
-          n_distinct(data$SubNum), " participants); component export checks passed.")
-  print(comparison %>% transmute(
+  detail("\n", rule$label, ": identical samples (", nrow(data), " rows, ",
+         n_distinct(data$SubNum), " participants); component export checks passed.")
+  detail_print(comparison %>% transmute(
     scope, age_term, signed_diff, distinctiveness_slope = Distinctiveness,
     difference = signed_diff - Distinctiveness
   ), n = Inf)
 }
 
-results <- bind_rows(lapply(MOTION_RULES, function(rule) {
-  message("\nBootstrapping ", rule$label)
+# Singular fits are retained and counted in the log and saved diagnostics.
+results_by_rule <- lapply(MOTION_RULES, function(rule) {
+  detail("\nBootstrapping ", rule$label)
   magnitude_contrast(analysis_data_by_rule[[rule$key]], B = B,
                      seed = MAGNITUDE_BOOT_SEED,
-                     rule_label_text = rule$label, cores = cores)
+                     rule_label_text = rule$label, cores = cores,
+                     pooled_only = TRUE, keep_draws = TRUE)
+})
+saveRDS(results_by_rule, file.path(DERIVED_DATA_DIR, "magnitude_bootstrap_by_rule.rds"))
+results <- bind_rows(lapply(results_by_rule, function(x) {
+  attr(x, "bootstrap") <- NULL
+  x
 }))
 validate_magnitude_signs(results)
 if (any(results$n_boot_ok == 0L)) {
   stop("No usable bootstrap draws for one or more rows; no table was written.")
 }
 
-for (rule in MOTION_RULES) {
-  for (scope_name in c("Pooled", "Motor")) {
-    row <- results %>% filter(motion_rule == rule$label, scope == scope_name,
-                              age_term == "between_cAge")
-    includes_zero <- row$delta_ci_lo <= 0 && row$delta_ci_hi >= 0
-    message(sprintf("%s, %s between-person: delta = %.7f; CI %s zero.",
-                    rule$label, scope_name, row$delta,
-                    if (includes_zero) "includes" else "excludes"))
-    if (rule$key == "primary") {
-      expected <- if (scope_name == "Pooled") .0031 else -.0004
-      if (abs(row$delta - expected) > .001) {
-        message("  CHECK: point estimate is more than 0.001 from the brief's ",
-                "approximate expectation (", expected, ").")
-      }
-    }
-  }
-}
-
 dir.create(TABLE_DIR, showWarnings = FALSE, recursive = TRUE)
 readr::write_csv(results, file.path(TABLE_DIR, "magnitude_comparison.csv"))
-message(sprintf("\nCompleted B = %d, seed = %d in %.1f seconds.",
-                B, MAGNITUDE_BOOT_SEED, proc.time()[["elapsed"]] - started))
-print(results %>% select(motion_rule, scope, age_term, n_boot_ok), n = Inf)
+detail(sprintf("\nCompleted B = %d, seed = %d in %.1f seconds.",
+               B, MAGNITUDE_BOOT_SEED, proc.time()[["elapsed"]] - started))
+detail_print(results %>% select(motion_rule, scope, age_term, n_boot_ok), n = Inf)
 message("Wrote ", file.path(TABLE_DIR, "magnitude_comparison.csv"))

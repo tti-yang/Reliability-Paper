@@ -1,0 +1,97 @@
+motion_rule,age_group,modality,statistic,old,corrected,difference,changed
+FD 0.4 mm / 10% (primary),Older adults,Auditory,runs_assessed,223,223,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,Auditory,runs_excluded,16,16,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,Auditory,pct_runs_excluded,7.174887892376682,7.174887892376682,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,Auditory,mean_pct_volumes_scrubbed,2.7852605381165914,2.7852605381165914,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,Motor,runs_assessed,226,226,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,Motor,runs_excluded,53,53,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,Motor,pct_runs_excluded,23.45132743362832,23.45132743362832,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,Motor,mean_pct_volumes_scrubbed,7.064896460176992,7.064896460176992,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,Visual,runs_assessed,226,226,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,Visual,runs_excluded,49,49,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,Visual,pct_runs_excluded,21.68141592920354,21.68141592920354,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,Visual,mean_pct_volumes_scrubbed,6.120948672566373,6.120948672566373,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,Auditory,runs_assessed,60,60,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,Auditory,runs_excluded,2,2,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,Auditory,pct_runs_excluded,3.3333333333333335,3.3333333333333335,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,Auditory,mean_pct_volumes_scrubbed,1.4444450000000002,1.4444450000000002,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,Motor,runs_assessed,60,60,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,Motor,runs_excluded,7,7,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,Motor,pct_runs_excluded,11.666666666666666,11.666666666666666,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,Motor,mean_pct_volumes_scrubbed,3.111118333333333,3.111118333333333,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,Visual,runs_assessed,60,60,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,Visual,runs_excluded,4,4,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,Visual,pct_runs_excluded,6.666666666666667,6.666666666666667,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,Visual,mean_pct_volumes_scrubbed,2.722226666666667,2.722226666666667,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,All modalities,runs_assessed,675,675,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,All modalities,runs_excluded,118,118,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,All modalities,pct_runs_excluded,17.48148148148148,17.48148148148148,0,FALSE
+FD 0.4 mm / 10% (primary),Older adults,All modalities,mean_pct_volumes_scrubbed,5.334983851851852,5.334983851851852,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,All modalities,runs_assessed,180,180,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,All modalities,runs_excluded,13,13,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,All modalities,pct_runs_excluded,7.222222222222221,7.222222222222221,0,FALSE
+FD 0.4 mm / 10% (primary),Young adults,All modalities,mean_pct_volumes_scrubbed,2.4259300000000006,2.4259300000000006,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,Auditory,runs_assessed,283,283,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,Auditory,runs_excluded,18,18,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,Auditory,pct_runs_excluded,6.36042402826855,6.36042402826855,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,Auditory,mean_pct_volumes_scrubbed,2.5009886925795053,2.5009886925795053,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,Motor,runs_assessed,286,286,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,Motor,runs_excluded,60,60,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,Motor,pct_runs_excluded,20.97902097902098,20.97902097902098,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,Motor,mean_pct_volumes_scrubbed,6.235432517482518,6.235432517482518,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,Visual,runs_assessed,286,286,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,Visual,runs_excluded,53,53,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,Visual,pct_runs_excluded,18.53146853146853,18.53146853146853,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,Visual,mean_pct_volumes_scrubbed,5.407930069930068,5.407930069930068,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,All modalities,runs_assessed,855,855,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,All modalities,runs_excluded,131,131,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,All modalities,pct_runs_excluded,15.321637426900589,15.321637426900589,0,FALSE
+FD 0.4 mm / 10% (primary),All participants,All modalities,mean_pct_volumes_scrubbed,4.722551461988304,4.722551461988304,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,Auditory,runs_assessed,223,223,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,Auditory,runs_excluded,1,1,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,Auditory,pct_runs_excluded,0.4484304932735426,0.4484304932735426,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,Auditory,mean_pct_volumes_scrubbed,1.6816210762331838,1.6816210762331838,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,Motor,runs_assessed,226,226,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,Motor,runs_excluded,6,6,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,Motor,pct_runs_excluded,2.6548672566371683,2.6548672566371683,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,Motor,mean_pct_volumes_scrubbed,4.446907522123894,4.446907522123894,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,Visual,runs_assessed,226,226,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,Visual,runs_excluded,6,6,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,Visual,pct_runs_excluded,2.6548672566371683,2.6548672566371683,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,Visual,mean_pct_volumes_scrubbed,3.9060995575221233,3.9060995575221233,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,Auditory,runs_assessed,60,60,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,Auditory,runs_excluded,0,0,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,Auditory,pct_runs_excluded,0,0,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,Auditory,mean_pct_volumes_scrubbed,0.97222833333333325,0.97222833333333325,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,Motor,runs_assessed,60,60,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,Motor,runs_excluded,0,0,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,Motor,pct_runs_excluded,0,0,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,Motor,mean_pct_volumes_scrubbed,2.1574166666666668,2.1574166666666668,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,Visual,runs_assessed,60,60,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,Visual,runs_excluded,1,1,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,Visual,pct_runs_excluded,1.6666666666666667,1.6666666666666667,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,Visual,mean_pct_volumes_scrubbed,1.8055633333333332,1.8055633333333332,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,All modalities,runs_assessed,675,675,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,All modalities,runs_excluded,13,13,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,All modalities,pct_runs_excluded,1.925925925925926,1.925925925925926,0,FALSE
+FD 0.5 mm / 20% (liberal),Older adults,All modalities,mean_pct_volumes_scrubbed,3.3522682962962955,3.3522682962962955,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,All modalities,runs_assessed,180,180,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,All modalities,runs_excluded,1,1,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,All modalities,pct_runs_excluded,0.5555555555555556,0.5555555555555556,0,FALSE
+FD 0.5 mm / 20% (liberal),Young adults,All modalities,mean_pct_volumes_scrubbed,1.6450694444444445,1.6450694444444445,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,Auditory,runs_assessed,283,283,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,Auditory,runs_excluded,1,1,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,Auditory,pct_runs_excluded,0.35335689045936397,0.35335689045936397,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,Auditory,mean_pct_volumes_scrubbed,1.5312197879858656,1.5312197879858656,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,Motor,runs_assessed,286,286,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,Motor,runs_excluded,6,6,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,Motor,pct_runs_excluded,2.097902097902098,2.097902097902098,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,Motor,mean_pct_volumes_scrubbed,3.9665947552447554,3.9665947552447554,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,Visual,runs_assessed,286,286,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,Visual,runs_excluded,7,7,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,Visual,pct_runs_excluded,2.4475524475524475,2.4475524475524475,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,Visual,mean_pct_volumes_scrubbed,3.465427622377623,3.465427622377623,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,All modalities,runs_assessed,855,855,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,All modalities,runs_excluded,14,14,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,All modalities,pct_runs_excluded,1.6374269005847957,1.6374269005847957,0,FALSE
+FD 0.5 mm / 20% (liberal),All participants,All modalities,mean_pct_volumes_scrubbed,2.992858011695906,2.992858011695906,0,FALSE

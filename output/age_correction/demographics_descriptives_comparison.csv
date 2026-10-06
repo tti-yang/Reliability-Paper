@@ -1,0 +1,241 @@
+table,motion_rule,sample,statistic,old,corrected,difference,changed,modality
+demographics,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",n,59,59,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",age_m,22.71186440677966,22.71186440677966,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",age_sd,2.9481194909673563,2.9481194909673563,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",age_min,18,18,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",age_max,29,29,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",education_m,15.33898305084746,15.33898305084746,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",education_sd,1.5714058003466025,1.5714058003466025,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",n_men,30,30,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",n_women,29,29,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",n,158,158,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",age_m,70.50632911392405,70.50632911392405,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",age_sd,5.020653947106813,5.020653947106813,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",age_min,65,65,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",age_max,87,87,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",education_m,16.82278481012658,16.82278481012658,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",education_sd,2.1813307086282774,2.1813307086282774,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",n_men,61,61,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",n_women,97,97,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",n,58,58,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",age_m,74.17241379310344,74.17241379310344,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",age_sd,5.367667764428057,5.367667764428057,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",age_min,68,68,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",age_max,94,94,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",education_m,16.655172413793103,16.655172413793103,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",education_sd,2.2128153389150955,2.2128153389150955,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",n_men,24,24,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",n_women,34,34,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",n,58,58,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",age_m,70.17241379310344,70.17241379310344,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",age_sd,5.05110004011453,5.05110004011453,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",age_min,65,65,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",age_max,87,87,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",education_m,16.655172413793103,16.655172413793103,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",education_sd,2.2128153389150955,2.2128153389150955,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",n_men,24,24,0,FALSE,NA
+demographics,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",n_women,34,34,0,FALSE,NA
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",n,58,58,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",reliability_m,0.7412406850116843,0.7412406850116843,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",reliability_sd,0.15068276902394143,0.15068276902394143,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",confusability_m,0.4057028918898148,0.4057028918898148,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",confusability_sd,0.24160377453489096,0.24160377453489096,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",distinctiveness_m,0.3355377931218694,0.3355377931218694,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",distinctiveness_sd,0.184747666718604,0.184747666718604,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",n,53,53,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",reliability_m,0.7784581080273721,0.7784581080273721,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",reliability_sd,0.2006870922117643,0.2006870922117643,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",confusability_m,-0.6438553767715217,-0.6438553767715217,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",confusability_sd,0.23242562494133537,0.23242562494133537,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",distinctiveness_m,1.422313484798894,1.422313484798894,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",distinctiveness_sd,0.4130410565084645,0.4130410565084645,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",n,56,56,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",reliability_m,0.7194845455949154,0.7194845455949154,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",reliability_sd,0.14806662371639936,0.14806662371639936,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",confusability_m,-0.11276485376871964,-0.11276485376871964,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",confusability_sd,0.24609262272573376,0.24609262272573376,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",distinctiveness_m,0.8322493993636351,0.8322493993636351,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Young adults, Wave 1",distinctiveness_sd,0.2874956633285911,0.2874956633285911,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",n,149,149,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",reliability_m,0.5376553499462541,0.5376553499462541,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",reliability_sd,0.2086161454167948,0.2086161454167948,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",confusability_m,0.2665783117768267,0.2665783117768267,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",confusability_sd,0.2406028376188483,0.2406028376188483,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",distinctiveness_m,0.27107703816942735,0.27107703816942735,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",distinctiveness_sd,0.148905539056929,0.148905539056929,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",n,130,130,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",reliability_m,0.6987155053158793,0.6987155053158793,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",reliability_sd,0.16963101258273083,0.16963101258273083,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",confusability_m,-0.5427686438475354,-0.5427686438475354,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",confusability_sd,0.19189384144232177,0.19189384144232177,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",distinctiveness_m,1.2414841491634152,1.2414841491634152,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",distinctiveness_sd,0.3357172352670402,0.3357172352670402,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",n,132,132,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",reliability_m,0.5613531497341175,0.5613531497341175,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",reliability_sd,0.18585002859607777,0.18585002859607777,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",confusability_m,-0.08537794212418888,-0.08537794212418888,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",confusability_sd,0.2240405859446169,0.2240405859446169,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",distinctiveness_m,0.6467310918583065,0.6467310918583065,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1",distinctiveness_sd,0.28737868763916297,0.28737868763916297,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",n,57,57,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",reliability_m,0.5400069392023857,0.5400069392023857,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",reliability_sd,0.18193954971787332,0.18193954971787332,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",confusability_m,0.25302177074255894,0.25302177074255894,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",confusability_sd,0.19390619625545225,0.19390619625545225,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",distinctiveness_m,0.28698516845982686,0.28698516845982686,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",distinctiveness_sd,0.13248680889058714,0.13248680889058714,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",n,43,43,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",reliability_m,0.6692562886073921,0.6692562886073921,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",reliability_sd,0.1908126699406393,0.1908126699406393,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",confusability_m,-0.5192301292341989,-0.5192301292341989,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",confusability_sd,0.23794836109674267,0.23794836109674267,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",distinctiveness_m,1.1884864178415906,1.1884864178415906,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",distinctiveness_sd,0.4095831784281044,0.4095831784281044,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",n,45,45,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",reliability_m,0.5342196642651991,0.5342196642651991,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",reliability_sd,0.1903709284919798,0.1903709284919798,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",confusability_m,-0.12201893249857972,-0.12201893249857972,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",confusability_sd,0.19969810121813733,0.19969810121813733,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",distinctiveness_m,0.6562385967637787,0.6562385967637787,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 2 (returners)",distinctiveness_sd,0.2762048185170397,0.2762048185170397,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",n,56,56,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",reliability_m,0.5447074964543716,0.5447074964543716,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",reliability_sd,0.2264171176328092,0.2264171176328092,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",confusability_m,0.2615705573831288,0.2615705573831288,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",confusability_sd,0.25735943100345504,0.25735943100345504,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",distinctiveness_m,0.2831369390712427,0.2831369390712427,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",distinctiveness_sd,0.169370179384104,0.169370179384104,0,FALSE,Auditory
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",n,53,53,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",reliability_m,0.7180407150266096,0.7180407150266096,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",reliability_sd,0.17151673439061374,0.17151673439061374,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",confusability_m,-0.5612843530016631,-0.5612843530016631,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",confusability_sd,0.1767090985339891,0.1767090985339891,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",distinctiveness_m,1.2793250680282735,1.2793250680282735,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",distinctiveness_sd,0.323549359091888,0.323549359091888,0,FALSE,Motor
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",n,52,52,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",reliability_m,0.5591285654578999,0.5591285654578999,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",reliability_sd,0.19872127147803129,0.19872127147803129,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",confusability_m,-0.10075483202136348,-0.10075483202136348,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",confusability_sd,0.22965426303757547,0.22965426303757547,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",distinctiveness_m,0.6598833974792635,0.6598833974792635,0,FALSE,Visual
+descriptives,FD 0.4 mm / 10% (primary),"Older adults, Wave 1 (Wave 2 returners)",distinctiveness_sd,0.3001954571284714,0.3001954571284714,0,FALSE,Visual
+demographics,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",n,60,60,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",age_m,22.766666666666666,22.766666666666666,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",age_sd,2.9536915521615894,2.9536915521615894,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",age_min,18,18,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",age_max,29,29,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",education_m,15.35,15.35,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",education_sd,1.5603671884245276,1.5603671884245276,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",n_men,31,31,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",n_women,29,29,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",n,166,166,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",age_m,70.51807228915662,70.51807228915662,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",age_sd,4.992992533864583,4.992992533864583,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",age_min,65,65,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",age_max,87,87,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",education_m,16.795180722891565,16.795180722891565,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",education_sd,2.1700944604190133,2.1700944604190133,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",n_men,62,62,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",n_women,104,104,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",n,60,60,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",age_m,74.35,74.35,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",age_sd,5.426941580232297,5.426941580232297,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",age_min,68,68,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",age_max,94,94,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",education_m,16.7,16.7,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",education_sd,2.188568141154069,2.188568141154069,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",n_men,24,24,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",n_women,36,36,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",n,60,60,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",age_m,70.33333333333333,70.33333333333333,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",age_sd,5.160694561934655,5.160694561934655,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",age_min,65,65,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",age_max,87,87,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",education_m,16.7,16.7,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",education_sd,2.188568141154069,2.188568141154069,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",n_men,24,24,0,FALSE,NA
+demographics,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",n_women,36,36,0,FALSE,NA
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",n,60,60,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",reliability_m,0.7335968008721523,0.7335968008721523,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",reliability_sd,0.15440805941309246,0.15440805941309246,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",confusability_m,0.3961711221386875,0.3961711221386875,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",confusability_sd,0.24391989266961392,0.24391989266961392,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",distinctiveness_m,0.3374256787334647,0.3374256787334647,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",distinctiveness_sd,0.18289549472004468,0.18289549472004468,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",n,60,60,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",reliability_m,0.7400151538625864,0.7400151538625864,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",reliability_sd,0.2274029465915817,0.2274029465915817,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",confusability_m,-0.6100572362903229,-0.6100572362903229,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",confusability_sd,0.24922883533254203,0.24922883533254203,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",distinctiveness_m,1.3500723901529093,1.3500723901529093,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",distinctiveness_sd,0.4600837846376839,0.4600837846376839,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",n,59,59,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",reliability_m,0.6954626919946096,0.6954626919946096,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",reliability_sd,0.1797408297601684,0.1797408297601684,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",confusability_m,-0.1162200362069267,-0.1162200362069267,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",confusability_sd,0.2393234608555264,0.2393234608555264,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",distinctiveness_m,0.8116827282015368,0.8116827282015368,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Young adults, Wave 1",distinctiveness_sd,0.2987003853957652,0.2987003853957652,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",n,162,162,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",reliability_m,0.5158294362879025,0.5158294362879025,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",reliability_sd,0.2169482503700092,0.2169482503700092,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",confusability_m,0.25386034442435623,0.25386034442435623,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",confusability_sd,0.23663991969782025,0.23663991969782025,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",distinctiveness_m,0.2619690918635463,0.2619690918635463,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",distinctiveness_sd,0.15108935082305544,0.15108935082305544,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",n,162,162,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",reliability_m,0.6712928702061401,0.6712928702061401,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",reliability_sd,0.1821083097627998,0.1821083097627998,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",confusability_m,-0.5187995108093144,-0.5187995108093144,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",confusability_sd,0.20099468075169655,0.20099468075169655,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",distinctiveness_m,1.1900923810154544,1.1900923810154544,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",distinctiveness_sd,0.3604434566812833,0.3604434566812833,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",n,162,162,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",reliability_m,0.5385448385614712,0.5385448385614712,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",reliability_sd,0.1897369968141212,0.1897369968141212,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",confusability_m,-0.08269547006866693,-0.08269547006866693,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",confusability_sd,0.21826860671734713,0.21826860671734713,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",distinctiveness_m,0.6212403086301381,0.6212403086301381,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1",distinctiveness_sd,0.2800197618439541,0.2800197618439541,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",n,60,60,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",reliability_m,0.5291365636667263,0.5291365636667263,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",reliability_sd,0.19239889141985236,0.19239889141985236,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",confusability_m,0.23921850761857105,0.23921850761857105,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",confusability_sd,0.19646309867003645,0.19646309867003645,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",distinctiveness_m,0.2899180560481554,0.2899180560481554,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",distinctiveness_sd,0.1427350652836035,0.1427350652836035,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",n,58,58,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",reliability_m,0.6438819213731424,0.6438819213731424,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",reliability_sd,0.2012044639452889,0.2012044639452889,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",confusability_m,-0.49915288469044494,-0.49915288469044494,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",confusability_sd,0.23912592754638531,0.23912592754638531,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",distinctiveness_m,1.1430348060635869,1.1430348060635869,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",distinctiveness_sd,0.42122392190812213,0.42122392190812213,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",n,58,58,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",reliability_m,0.47612066523776897,0.47612066523776897,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",reliability_sd,0.2141971725006712,0.2141971725006712,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",confusability_m,-0.11944775158010362,-0.11944775158010362,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",confusability_sd,0.1876214467320736,0.1876214467320736,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",distinctiveness_m,0.5955684168178726,0.5955684168178726,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 2 (returners)",distinctiveness_sd,0.2981018487630941,0.2981018487630941,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",n,59,59,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",reliability_m,0.529846438955544,0.529846438955544,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",reliability_sd,0.232494289572731,0.232494289572731,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",confusability_m,0.2523256012071288,0.2523256012071288,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",confusability_sd,0.2550483795343193,0.2550483795343193,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",distinctiveness_m,0.27752083774841513,0.27752083774841513,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",distinctiveness_sd,0.17102539027292565,0.17102539027292565,0,FALSE,Auditory
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",n,59,59,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",reliability_m,0.6906153732331046,0.6906153732331046,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",reliability_sd,0.1849118854151195,0.1849118854151195,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",confusability_m,-0.5396169612279754,-0.5396169612279754,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",confusability_sd,0.1853449566135301,0.1853449566135301,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",distinctiveness_m,1.2302323344610802,1.2302323344610802,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",distinctiveness_sd,0.34916996670572786,0.34916996670572786,0,FALSE,Motor
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",n,59,59,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",reliability_m,0.537232476459531,0.537232476459531,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",reliability_sd,0.21267971971659108,0.21267971971659108,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",confusability_m,-0.08982467817839708,-0.08982467817839708,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",confusability_sd,0.23456393736472653,0.23456393736472653,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",distinctiveness_m,0.6270571546379281,0.6270571546379281,0,FALSE,Visual
+descriptives,FD 0.5 mm / 20% (liberal),"Older adults, Wave 1 (Wave 2 returners)",distinctiveness_sd,0.30894494435215986,0.30894494435215986,0,FALSE,Visual

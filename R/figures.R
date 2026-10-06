@@ -1,62 +1,47 @@
-# Manuscript figures 2, 3, and 4.
+# The manuscript figures.
 #
-# Both figures are one 3 x 4 grid built by the same function, so they cannot
-# drift apart. Measure is the row throughout and the modality average is the
-# leftmost column of the same grid rather than a separate stacked panel.
+# Two figures are built here:
 #
-# Extracted verbatim from the manuscript-figure-helpers chunk of the original
-# interactive document; only this header is new.
+#   the combined age-effect figure -- one 3 x 2 grid, outcome by row and age
+#   term by column, with a pooled and three modality-specific fitted lines in
+#   every panel; and
+#
+#   the magnitude-contrast figure, in a between-person and a within-person
+#   variant sharing one layout.
+#
+# Colour means MODALITY in both, from one palette defined once below, so a
+# series keeps its colour across the whole figure set.
 
-# ---------------------------------------------------------------------------
-# Shared aesthetic mapping for every manuscript figure.
-#
-# Colour encodes the measure and nothing else. Shape encodes the modality
-# column in Figures 2-3. Figure 4 uses shapes to distinguish the estimates
-# within each scope. Outcome colours are shared across all three figures.
-# ---------------------------------------------------------------------------
-# The row order and the column order of both figures. The average column is the
-# leftmost column of the same grid, not a separate panel stacked above it. It
-# keeps the short level name "Average" in the data - the checks and the filters
-# key on it - and is labelled "All modalities" on the figure, which describes
-# the aggregate rather than suggesting a location.
+# The data keeps the short level name "Average" for the pooled series -- the
+# checks and the filters key on it -- and it is relabelled POOLED_SERIES on the
+# figure, which describes the aggregate rather than suggesting a location.
 MEASURES <- OUTCOMES
 AVERAGE_COLUMN <- "Average"
 MODALITY_COLUMNS <- c(AVERAGE_COLUMN, "Auditory", "Visual", "Motor")
 
-MEASURE_COLOURS <- c(
-  Reliability = "#0072B2",      # Okabe-Ito blue
-  Confusability = "#D55E00",    # Okabe-Ito vermillion
-  Distinctiveness = "#009E73"   # Okabe-Ito green
-)
+# Rows of the combined figure, top to bottom. This is the Results order and is
+# deliberately NOT the order of OUTCOMES; do not sort it.
+COMBINED_MEASURE_LEVELS <- c("Distinctiveness", "Reliability", "Confusability")
 
-# Outlined-fill shapes: the fill and the outline are drawn as two layers so the
-# pale fill (alpha 0.15) and the darker outline (alpha 0.6) can share one
-# colour scale with the ribbons and model lines. The average column gets the
-# neutral diamond, so it reads as a summary rather than as a fourth modality,
-# and it is named in the legend rather than left unexplained.
-MODALITY_SHAPES <- c(
-  Average = 23,    # diamond
-  Auditory = 21,   # circle
-  Visual = 24,     # triangle
-  Motor = 22       # square
-)
+# Columns of the combined figure, left to right.
+COMBINED_COLUMNS <- c("Between-person", "Within-person")
 
-# Every panel is named by its own strips, so neither figure carries a legend at
-# all. The shape mapping is kept - it is what keeps the three modality columns
-# visually distinct - but its guide is dropped: a shape legend would list the
-# average alongside the modalities and imply it is a fourth one.
-scale_measure_colour <- scale_colour_manual(
-  values = MEASURE_COLOURS,
-  guide = "none"
-)
-scale_measure_fill <- scale_fill_manual(
-  values = MEASURE_COLOURS,
-  guide = "none"
-)
-scale_modality_shape <- scale_shape_manual(
-  values = MODALITY_SHAPES,
-  breaks = MODALITY_COLUMNS,
-  guide = "none"
+# ---------------------------------------------------------------------------
+# The one palette. Colour encodes modality and nothing else, in the combined
+# figure and in the magnitude figure alike.
+#
+# The pooled series takes a dark neutral rather than a hue, so it reads as the
+# primary estimate and not as a fourth modality; the three modalities are
+# Okabe-Ito hues, which stay distinguishable under the common forms of colour
+# blindness and in greyscale.
+# ---------------------------------------------------------------------------
+POOLED_SERIES <- "All modalities"
+SERIES_LEVELS <- c(POOLED_SERIES, "Auditory", "Visual", "Motor")
+SERIES_COLOURS <- c(
+  "All modalities" = "#1A1A1A",  # near-black
+  Auditory         = "#0072B2",  # Okabe-Ito blue
+  Visual           = "#D55E00",  # Okabe-Ito vermillion
+  Motor            = "#009E73"   # Okabe-Ito bluish green
 )
 
 MEASURE_STRIP_LABELS <- c(
@@ -64,39 +49,44 @@ MEASURE_STRIP_LABELS <- c(
   Confusability = "Neural confusability",
   Distinctiveness = "Neural distinctiveness"
 )
-MODALITY_STRIP_LABELS <- c(
-  Average = "All modalities",
-  Auditory = "Auditory",
-  Visual = "Visual",
-  Motor = "Motor"
-)
-manuscript_labeller <- labeller(
-  measure = MEASURE_STRIP_LABELS,
-  modality = MODALITY_STRIP_LABELS
-)
 
-# Raw two-wave segments are drawn in neutral grey: they are the data layer, and
-# leaving them uncoloured keeps colour reserved for the outcome and keeps the
-# model line visible on top of them.
-SEGMENT_COLOUR <- "grey55"
-SEGMENT_ALPHA <- 0.25
-SEGMENT_WIDTH <- 0.3
+# The reference each column is centred on. Age 65 matches the model centring
+# (OLDER_ADULT_AGE, the origin of between_cAge); year 0 is each participant's
+# own first retained wave.
+COMBINED_REFERENCES <- c(
+  "Between-person" = OLDER_ADULT_AGE,
+  "Within-person" = 0
+)
+CENTRED_ZERO_LINE_COLOUR <- "grey85"
+CENTRED_ZERO_LINE_WIDTH <- 0.3
 
-POINT_SIZE <- 1.2
+# The pooled line is drawn markedly thicker than the three modality lines, so
+# the primary estimate is legible where all four overlap.
+COMBINED_POOLED_WIDTH <- 1.15
+COMBINED_MODALITY_WIDTH <- 0.5
+COMBINED_GAP_WIDTH_SCALE <- 0.8   # dashed spans, slightly lighter than solid
+# The pooled line is thick, and ggplot scales a dash pattern with linewidth, so
+# "dashed" there reads as a row of long bars. It gets a tighter pattern of its
+# own; the thinner modality lines keep the default.
+COMBINED_POOLED_DASH <- "22"
+
+# Colored modality slopes are descriptive only in both columns.
+# Within-person lines are subordinated -- thinner and semi-transparent,
+# and without ribbons. The between-person column is unaffected.
+COMBINED_WITHIN_MODALITY_WIDTH <- 0.35
+COMBINED_WITHIN_MODALITY_ALPHA <- 0.5
+
+# Only the pooled line carries a ribbon: four overlapping ribbons per panel is
+# unreadable.
+COMBINED_RIBBON_ALPHA <- 0.18
+
 POINT_STROKE <- 0.35
-POINT_FILL_ALPHA <- 0.15
-POINT_OUTLINE_ALPHA <- 0.6
-
-RIBBON_ALPHA <- 0.25
-LINE_WIDTH <- 0.8
-GAP_LINE_WIDTH <- 0.6
 
 # Ages and follow-up intervals are recorded in whole years, so points would
 # otherwise stack into vertical stripes. Jitter is horizontal only - the
 # outcome is never displaced - and is seeded so every figure and every rebuild
 # places the same point in the same place.
 JITTER_SEED <- 1
-FIGURE2_JITTER_WIDTH <- 0.5
 FIGURE3_JITTER_WIDTH <- 0.15
 
 AGE_AXIS_LABEL <- "Age (years)"
@@ -104,29 +94,16 @@ WITHIN_TIME_LABEL <- "Years from first wave"
 WITHIN_TIME_BREAKS <- c(0, 2, 4, 6)
 
 FIGURE_WIDTH_MM <- 180
-FIGURE_HEIGHT_MM <- 150       # one 3 x 4 grid, no stacked panels
+FIGURE_HEIGHT_MM <- 150
 FIGURE_DPI <- 300
 GRID_POINTS <- 100
 
-# The average column is set apart from the block of three modality columns by
-# roughly one extra panel gap of whitespace. ggplot2 accepts one width per gap
-# between panel columns, so this is the gap after column 1 followed by the gaps
-# inside the modality block; widen or narrow the break by editing one number.
-AVERAGE_COLUMN_GAP <- 16      # points (~5.6 mm at the saved figure width)
-MODALITY_COLUMN_GAP <- 4      # points
+# Portrait, and wide enough that six panels stay legible at a two-column
+# journal width (180 mm); each panel is then about 62 x 52 mm.
+COMBINED_WIDTH_MM <- 140
+COMBINED_HEIGHT_MM <- 185
 
-# A thin rule is drawn in that gap, so the break survives greyscale print
-# without tinting any panel: all four panels keep the same white background.
-AVERAGE_DIVIDER_COLOUR <- "grey70"
-AVERAGE_DIVIDER_WIDTH <- 0.5
 
-# Figure 4 is an estimate/interval display rather than a trajectory plot.
-# Keep the outcome colours above; only the new magnitude contrast needs a colour.
-MAGNITUDE_COLOUR <- "grey25"
-FIGURE4_SCOPES <- c("Pooled", "Auditory", "Visual", "Motor")
-FIGURE4_SCOPE_POSITIONS <- c(Pooled = 4, Auditory = 3, Visual = 2, Motor = 1)
-FIGURE4_DODGE <- 0.06
-FIGURE4_HEIGHT_MM <- 85
 
 manuscript_theme <- function(base_size = 9) {
   theme_classic(base_size = base_size) +
@@ -149,65 +126,6 @@ manuscript_theme <- function(base_size = 9) {
       plot.tag = element_text(face = "bold", size = 11),
       plot.margin = margin(3, 5, 3, 3)
     )
-}
-
-# The average column's strip label is emphasised by weight alone: same
-# typeface, same size, bold. Per-strip text needs ggh4x's themed strips, since
-# theme(strip.text.x = ...) styles every column strip at once.
-manuscript_strips <- function() {
-  ggh4x::strip_themed(
-    text_x = ggh4x::elem_list_text(
-      face = c("bold", rep("plain", length(MODALITY_COLUMNS) - 1))
-    )
-  )
-}
-
-# The divider is a gtable edit, because no ggplot layer can draw in the gap
-# between two panel columns - that space belongs to the layout, not to any
-# panel. The rule is inserted into the existing spacing column, so no width
-# changes and the panels keep the sizes ggplot2 gave them.
-#
-# Positions are looked up from the panel grobs rather than hard-coded: the gap
-# is the widest layout column between panel column 1 and panel column 2, and
-# the rule spans the panel rows only, so it stops short of the column strips
-# above and the x axis below.
-add_average_divider <- function(figure) {
-  table <- ggplotGrob(figure)
-  panels <- table$layout[grep("^panel", table$layout$name), ]
-
-  panel_columns <- sort(unique(panels$l))
-  panel_rows <- sort(unique(panels$t))
-  stopifnot(length(panel_columns) == length(MODALITY_COLUMNS))
-
-  gap_candidates <- seq(panel_columns[[1]] + 1, panel_columns[[2]] - 1)
-  gap_widths <- vapply(
-    gap_candidates,
-    function(i) as.numeric(convertWidth(table$widths[i], "pt")),
-    numeric(1)
-  )
-  gap_column <- gap_candidates[[which.max(gap_widths)]]
-  # The gap must be the widened one, not a zero-width layout artefact.
-  stopifnot(max(gap_widths) > MODALITY_COLUMN_GAP)
-
-  widths_before <- table$widths
-  table <- gtable::gtable_add_grob(
-    table,
-    linesGrob(
-      x = unit(c(0.5, 0.5), "npc"),
-      y = unit(c(0, 1), "npc"),
-      gp = gpar(col = AVERAGE_DIVIDER_COLOUR, lwd = AVERAGE_DIVIDER_WIDTH)
-    ),
-    t = min(panel_rows),
-    b = max(panel_rows),
-    l = gap_column,
-    r = gap_column,
-    name = "average-divider"
-  )
-  # Inserting into an existing column cannot resize anything; assert it anyway,
-  # because a shifted panel width would break the across-column comparison.
-  stopifnot(identical(as.character(widths_before), as.character(table$widths)))
-
-  table
 }
 
 # predict.merMod gives no standard errors, so the fixed-effect prediction and
@@ -339,104 +257,6 @@ with_seeded_rng <- function(seed, expression) {
 }
 
 # ---------------------------------------------------------------------------
-# Layer builders. Order is fixed everywhere: raw segments, then points, then
-# the CI ribbon, then the model line on top of the data cloud.
-# ---------------------------------------------------------------------------
-segment_layer <- function(segments) {
-  if (is.null(segments)) return(NULL)
-
-  geom_line(
-    data = segments,
-    aes(x, value, group = participant),
-    colour = SEGMENT_COLOUR, alpha = SEGMENT_ALPHA, linewidth = SEGMENT_WIDTH
-  )
-}
-
-point_layers <- function(points, position) {
-  list(
-    geom_point(
-      data = points,
-      aes(x, value, fill = measure, shape = modality),
-      colour = NA, alpha = POINT_FILL_ALPHA, size = POINT_SIZE,
-      stroke = POINT_STROKE, position = position, show.legend = FALSE
-    ),
-    geom_point(
-      data = points,
-      aes(x, value, colour = measure, shape = modality),
-      fill = NA, alpha = POINT_OUTLINE_ALPHA, size = POINT_SIZE,
-      stroke = POINT_STROKE, position = position
-    )
-  )
-}
-
-model_layers <- function(lines) {
-  list(
-    geom_ribbon(
-      data = lines,
-      aes(x, ymin = conf_low, ymax = conf_high, fill = measure,
-          group = line_group),
-      alpha = RIBBON_ALPHA, colour = NA
-    ),
-    geom_line(
-      data = lines %>% filter(gap_span),
-      aes(x, predicted, colour = measure, group = line_group),
-      linewidth = GAP_LINE_WIDTH, linetype = "dashed"
-    ),
-    geom_line(
-      data = lines %>% filter(!is.na(solid_segment)),
-      aes(x, predicted, colour = measure, group = solid_group),
-      linewidth = LINE_WIDTH
-    )
-  )
-}
-
-# ---------------------------------------------------------------------------
-# The figure builder. Both manuscript figures are this one 3 x 4 grid: measure
-# is the row throughout, and the modality average is the leftmost column of the
-# same grid rather than a separate panel stacked above it.
-#
-# scales = "free_y" is load-bearing. It frees the y scale by ROW and shares it
-# within the row, so all four columns of a row sit on one scale, drawn once at
-# the left; switch = "y" puts the measure strip where that y title would be.
-# scales = "free" would give each of the twelve panels its own y axis and
-# destroy the across-column comparison the row exists to support.
-# ---------------------------------------------------------------------------
-build_measure_modality_figure <- function(points, lines, x_label,
-                                          segments = NULL,
-                                          position = position_identity(),
-                                          x_scale = NULL) {
-  figure <- ggplot() +
-    segment_layer(segments) +
-    point_layers(points, position) +
-    model_layers(lines) +
-    # facet_grid2 is facet_grid plus per-strip theming; the faceting itself is
-    # unchanged, including the load-bearing scales = "free_y".
-    ggh4x::facet_grid2(
-      measure ~ modality,
-      scales = "free_y", switch = "y", labeller = manuscript_labeller,
-      strip = manuscript_strips()
-    ) +
-    scale_measure_colour +
-    scale_measure_fill +
-    scale_modality_shape +
-    guides(shape = "none") +
-    labs(x = x_label, y = NULL) +
-    manuscript_theme() +
-    theme(
-      panel.spacing.x = unit(
-        c(
-          AVERAGE_COLUMN_GAP,
-          rep(MODALITY_COLUMN_GAP, length(MODALITY_COLUMNS) - 2)
-        ),
-        "pt"
-      )
-    )
-
-  if (!is.null(x_scale)) figure <- figure + x_scale
-  figure
-}
-
-# ---------------------------------------------------------------------------
 # Figure 2: between-person age effects.
 #
 # The Average column is the former panel A, unchanged: the same participant
@@ -509,7 +329,7 @@ figure2_modality_points <- function(data) {
   })
 }
 
-figure2_modality_lines <- function(data, interaction_models) {
+figure2_modality_lines <- function(data, visualization_models) {
   map_dfr(MEASURES, function(measure_name) {
     column_data <- prepare_interaction_data(
       complete_outcome_data(data, measure_name)
@@ -537,7 +357,7 @@ figure2_modality_lines <- function(data, interaction_models) {
     # Modality stays a factor with the interaction model's own levels until the
     # design matrix has been built; only then does it become a plotting column.
     fixed_effect_predictions(
-      interaction_models[[measure_name]],
+      visualization_models[[measure_name]],
       prediction_grid,
       contrasts_option = INTERACTION_CONTRASTS
     ) %>%
@@ -545,7 +365,7 @@ figure2_modality_lines <- function(data, interaction_models) {
   })
 }
 
-figure2_plot_data <- function(data, models, interaction_models) {
+figure2_plot_data <- function(data, models, visualization_models) {
   list(
     points = bind_rows(
       figure2_average_points(data),
@@ -554,22 +374,9 @@ figure2_plot_data <- function(data, models, interaction_models) {
       as_plot_frame(),
     lines = bind_rows(
       figure2_average_lines(data, models),
-      figure2_modality_lines(data, interaction_models)
+      figure2_modality_lines(data, visualization_models)
     ) %>%
       as_line_frame()
-  )
-}
-
-# Takes the frame built above rather than building it, so the figure and the
-# checks run on exactly the same rows.
-build_figure2 <- function(figure_data) {
-  build_measure_modality_figure(
-    figure_data$points,
-    figure_data$lines,
-    AGE_AXIS_LABEL,
-    position = position_jitter(
-      width = FIGURE2_JITTER_WIDTH, height = 0, seed = JITTER_SEED
-    )
   )
 }
 
@@ -666,7 +473,7 @@ figure3_modality_sessions <- function(data) {
   })
 }
 
-figure3_modality_lines <- function(data, interaction_models, sessions) {
+figure3_modality_lines <- function(data, visualization_models, sessions) {
   map_dfr(MEASURES, function(measure_name) {
     covariates <- typical_covariates(complete_outcome_data(data, measure_name))
 
@@ -683,7 +490,7 @@ figure3_modality_lines <- function(data, interaction_models, sessions) {
       )
 
     fixed_effect_predictions(
-      interaction_models[[measure_name]],
+      visualization_models[[measure_name]],
       prediction_grid,
       contrasts_option = INTERACTION_CONTRASTS
     ) %>%
@@ -691,7 +498,7 @@ figure3_modality_lines <- function(data, interaction_models, sessions) {
   })
 }
 
-figure3_plot_data <- function(data, models, interaction_models) {
+figure3_plot_data <- function(data, models, visualization_models) {
   # The prediction grids are built from the unjittered sessions; the display
   # frame is jittered once - not per layer - so each participant's segment and
   # its endpoint markers all move by the same offset.
@@ -704,192 +511,660 @@ figure3_plot_data <- function(data, models, interaction_models) {
       jitter_participant_x(FIGURE3_JITTER_WIDTH),
     lines = bind_rows(
       figure3_average_lines(data, models, average_sessions),
-      figure3_modality_lines(data, interaction_models, modality_sessions)
+      figure3_modality_lines(data, visualization_models, modality_sessions)
     ) %>%
       as_line_frame()
   )
 }
 
-build_figure3 <- function(figure_data) {
-  # Points and grey connecting segments are the same rows, so they cannot come
-  # apart: the segment joins exactly the two markers it belongs to.
-  build_measure_modality_figure(
-    figure_data$points,
-    figure_data$lines,
-    WITHIN_TIME_LABEL,
-    segments = figure_data$points,
-    x_scale = scale_x_continuous(breaks = WITHIN_TIME_BREAKS)
+# ---------------------------------------------------------------------------
+# The combined age-effect figure.
+#
+# One 3 x 2 grid: outcome by row (distinctiveness, reliability, confusability --
+# the Results order), age term by column. Every panel carries the pooled fitted
+# line and the three modality-specific fitted lines, from the same models that
+# fed the earlier pair of figures; nothing is refitted here.
+#
+# scales = "free" is load-bearing, and means exactly what is wanted: in
+# facet_grid the y scale is freed by ROW and shared across the columns of that
+# row, and the x scale is freed by COLUMN and shared down the rows of that
+# column. Age in years and years-from-first-wave therefore never share an axis,
+# while the two columns of a row stay directly comparable.
+# ---------------------------------------------------------------------------
+combined_series <- function(modality) {
+  factor(
+    if_else(modality == AVERAGE_COLUMN, POOLED_SERIES, modality),
+    levels = SERIES_LEVELS
   )
 }
 
-# ---------------------------------------------------------------------------
-# Figure 4: component slopes and contrasts, from previously exported estimates.
-# Each row shares explicit x limits across its two patchwork panels. This gives
-# independent between/within ranges without refitting or relying on facet scales.
-# ---------------------------------------------------------------------------
-figure4_plot_data <- function(magnitude, pooled_models, modality_slopes,
-                              rule_label_text) {
-  magnitude <- magnitude %>% filter(motion_rule == rule_label_text)
-  model_intervals <- bind_rows(
-    pooled_models %>%
-      filter(motion_rule == rule_label_text, term %in% AGE_TERMS) %>%
-      transmute(
-        scope = "Pooled", age_term = term, measure = outcome,
-        estimate, conf_low = estimate - qt(.975, df) * se,
-        conf_high = estimate + qt(.975, df) * se
-      ),
-    modality_slopes %>%
-      filter(motion_rule == rule_label_text, age_term %in% AGE_TERMS) %>%
-      transmute(
-        scope = modality, age_term, measure = outcome,
-        estimate = slope, conf_low = lower.CL, conf_high = upper.CL
+# Reshapes the two cached per-column frames into one frame of fitted lines.
+# Pure reshaping: no model is fitted and no estimate recomputed, so stage 02's
+# cache is unchanged. Raw observations are deliberately not carried through --
+# they are pooled-sample points, and three of the four lines in a panel are not
+# pooled, so they correspond to nothing that is drawn.
+combined_plot_data <- function(figure2_data, figure3_data) {
+  as_combined <- function(frame, column) {
+    frame %>%
+      mutate(
+        column = factor(column, levels = COMBINED_COLUMNS),
+        measure = factor(
+          as.character(measure), levels = COMBINED_MEASURE_LEVELS
+        ),
+        series = combined_series(as.character(modality))
       )
-  )
-  stopifnot(
-    nrow(magnitude) == 8L, nrow(model_intervals) == 24L,
-    !anyDuplicated(magnitude[c("scope", "age_term")]),
-    !anyDuplicated(model_intervals[c("scope", "age_term", "measure")]),
-    setequal(magnitude$scope, FIGURE4_SCOPES),
-    setequal(magnitude$age_term, AGE_TERMS),
-    setequal(model_intervals$measure, OUTCOMES),
-    all(abs(magnitude$signed_diff -
-              (magnitude$b_reliability - magnitude$b_confusability)) < 1e-8),
-    all(abs(magnitude$delta -
-              (abs(magnitude$b_reliability) - abs(magnitude$b_confusability))) < 1e-8)
-  )
+  }
 
-  components <- magnitude %>%
-    select(scope, age_term, Reliability = b_reliability,
-           Confusability = b_confusability) %>%
-    pivot_longer(all_of(c("Reliability", "Confusability")),
-                 names_to = "measure", values_to = "estimate") %>%
-    left_join(model_intervals, by = c("scope", "age_term", "measure"),
-              suffix = c("", "_model"))
-  stopifnot(all(abs(components$estimate - components$estimate_model) < 1e-8))
-
-  # Reverse the model estimate and BOTH interval endpoints, swapping their
-  # order: [lo, hi] becomes [-hi, -lo]. The fitted distinctiveness slope is a
-  # model approximation to the component difference, not an exact identity.
-  result <- bind_rows(
-    components %>% select(-estimate_model) %>% mutate(column = "Components"),
-    model_intervals %>% filter(measure == "Distinctiveness") %>%
-      mutate(reversed_low = -conf_high, reversed_high = -conf_low) %>%
-      transmute(scope, age_term, measure, estimate = -estimate,
-                conf_low = reversed_low, conf_high = reversed_high,
-                column = "Contrasts"),
-    magnitude %>% transmute(
-      scope, age_term, measure = "Delta", estimate = delta,
-      conf_low = delta_ci_lo, conf_high = delta_ci_hi, column = "Contrasts"
+  lines <- bind_rows(
+    as_combined(figure2_data$lines, COMBINED_COLUMNS[[1]]),
+    as_combined(figure3_data$lines, COMBINED_COLUMNS[[2]])
+  ) %>%
+    mutate(
+      line_group = paste(measure, series, column),
+      solid_group = paste(measure, series, column, solid_segment)
     )
-  )
-  counts <- result %>% count(age_term, column, scope)
+
   stopifnot(
-    nrow(result) == 32L, nrow(counts) == 16L, all(counts$n == 2L),
-    !anyNA(result),
-    all(is.finite(as.matrix(result[c("estimate", "conf_low", "conf_high")]))),
-    all(result$conf_low <= result$conf_high)
+    setequal(levels(lines$measure), COMBINED_MEASURE_LEVELS),
+    # All four series are present in BOTH columns. The within-person modality
+    # lines are subordinated when drawn, not dropped here.
+    setequal(
+      as.character(lines$series[lines$column == COMBINED_COLUMNS[[1]]]),
+      SERIES_LEVELS
+    ),
+    setequal(
+      as.character(lines$series[lines$column == COMBINED_COLUMNS[[2]]]),
+      SERIES_LEVELS
+    ),
+    # Dashes mark the unsampled age range and nothing else, so they may only
+    # ever appear in the between-person column.
+    !any(lines$gap_span[lines$column == COMBINED_COLUMNS[[2]]])
   )
-  result
+  lines
 }
 
-figure4_panel <- function(data, x_limits, title, x_label, labels) {
-  colours <- c(MEASURE_COLOURS, Delta = MAGNITUDE_COLOUR)
-  shapes <- c(Reliability = 16, Confusability = 17,
-              Distinctiveness = 23, Delta = 15)
-  data <- data %>% mutate(
-    y = unname(FIGURE4_SCOPE_POSITIONS[scope]) +
-      if_else(measure %in% c("Reliability", "Distinctiveness"),
-              FIGURE4_DODGE, -FIGURE4_DODGE),
-    interval_type = if_else(measure == "Delta", "Bootstrap percentile", "Model-based")
+# ---------------------------------------------------------------------------
+# The pooled slope, its standard error and its Satterthwaite df, keyed the way
+# the combined figure needs them. Takes model_estimates.csv, or anything with
+# its columns.
+# ---------------------------------------------------------------------------
+combined_pooled_slopes <- function(pooled_models, rule_label_text) {
+  slopes <- pooled_models %>%
+    filter(motion_rule == rule_label_text, term %in% AGE_TERMS) %>%
+    transmute(
+      measure = factor(outcome, levels = COMBINED_MEASURE_LEVELS),
+      column = factor(
+        if_else(term == "between_cAge", COMBINED_COLUMNS[[1]], COMBINED_COLUMNS[[2]]),
+        levels = COMBINED_COLUMNS
+      ),
+      b = estimate, se, df
+    )
+  stopifnot(
+    nrow(slopes) == length(COMBINED_MEASURE_LEVELS) * length(COMBINED_COLUMNS),
+    !anyDuplicated(slopes[c("measure", "column")]),
+    !anyNA(slopes), all(slopes$se > 0), all(slopes$df > 0)
   )
-  # Match endpoints by scope, rather than relying on the order of the rows.
-  connectors <- data %>% filter(measure == "Distinctiveness") %>%
-    select(scope, x = estimate, y) %>%
-    inner_join(data %>% filter(measure == "Delta") %>%
-                 select(scope, xend = estimate, yend = y), by = "scope")
+  slopes
+}
 
-  ggplot(data, aes(estimate, y, colour = measure, shape = measure)) +
-    geom_vline(xintercept = 0, colour = "grey65", linewidth = 0.3) +
-    geom_hline(yintercept = 3.5, colour = "grey85", linewidth = 0.25) +
-    geom_segment(data = connectors, aes(x = x, y = y, xend = xend, yend = yend),
-                 inherit.aes = FALSE, colour = "grey75", linewidth = 0.3) +
-    geom_segment(aes(x = conf_low, xend = conf_high, yend = y,
-                     linetype = interval_type),
-                 linewidth = 0.5, show.legend = FALSE) +
-    geom_point(size = 2.2, stroke = POINT_STROKE, fill = "white",
-               show.legend = TRUE) +
-    scale_colour_manual(values = colours, limits = names(colours), labels = labels,
-                        drop = FALSE) +
-    scale_shape_manual(values = shapes, limits = names(colours), labels = labels,
-                       drop = FALSE) +
-    scale_linetype_manual(values = c("Model-based" = "solid",
-                                    "Bootstrap percentile" = "22"), guide = "none") +
-    scale_y_continuous(
-      breaks = unname(FIGURE4_SCOPE_POSITIONS), labels = FIGURE4_SCOPES,
-      limits = c(.76, 4.24), expand = expansion(mult = 0)
+# ---------------------------------------------------------------------------
+# The ribbon: the CI of the CHANGE, not of the fitted value.
+#
+# At the reference the plotted change is zero by construction, so its interval
+# must have zero width there. For a model linear in the age term the change is
+# b * (x - x_ref) and its standard error is SE(b) * |x - x_ref|, giving
+#
+#     b * (x - x_ref)  +/-  t(0.975, df) * SE(b) * |x - x_ref|
+#
+# -- a straight-edged bowtie pinched shut at the reference. df is the
+# Satterthwaite df of the same coefficient the tables report, so the ribbon and
+# the tabled interval are the same statement.
+#
+# Shifting the fitted-value interval instead, as this figure did before, leaves
+# a ribbon of non-zero width around a quantity that is exactly zero.
+# ---------------------------------------------------------------------------
+combined_change_ribbon <- function(centred_lines, pooled_slopes) {
+  ribbon <- centred_lines %>%
+    filter(series == POOLED_SERIES) %>%
+    group_by(measure, column) %>%
+    group_modify(function(panel, key) {
+      reference <- COMBINED_REFERENCES[[as.character(key$column)]]
+      slope <- pooled_slopes %>%
+        filter(measure == key$measure, column == key$column)
+      stopifnot(nrow(slope) == 1L)
+
+      # Two routes to one number: the centred pooled line comes from the cached
+      # design-matrix predictions, b comes from the exported coefficient. They
+      # must agree, or the ribbon would belong to a different line.
+      stopifnot(
+        max(abs(panel$predicted - slope$b * (panel$x - reference))) < 1e-8
+      )
+
+      # The reference is not generally on the prediction grid; adding it puts a
+      # point exactly at the pinch.
+      grid <- sort(unique(c(panel$x, reference)))
+      change <- slope$b * (grid - reference)
+      half_width <- qt(.975, slope$df) * slope$se * abs(grid - reference)
+      tibble(
+        x = grid,
+        predicted = change,
+        conf_low = change - half_width,
+        conf_high = change + half_width
+      )
+    }) %>%
+    ungroup()
+
+  # The width at the reference is zero, exactly.
+  at_reference <- ribbon %>%
+    group_by(measure, column) %>%
+    summarise(
+      width = {
+        reference <- COMBINED_REFERENCES[[as.character(column[[1]])]]
+        (conf_high - conf_low)[which(x == reference)]
+      },
+      .groups = "drop"
+    )
+  stopifnot(
+    nrow(at_reference) == length(COMBINED_MEASURE_LEVELS) * length(COMBINED_COLUMNS),
+    all(at_reference$width == 0),
+    # ... and nowhere else, so the bowtie really is pinched at one point.
+    all(ribbon$conf_high >= ribbon$conf_low)
+  )
+  ribbon
+}
+
+# Every modality line drawn must be the emtrends simple slope the tables
+# report. The lines come from the cached interaction-model predictions and the
+# slopes from {rule}_simple_slopes.csv, which emtrends produced; for a model
+# linear in the age term the two are the same number by construction, and this
+# says so out loud rather than trusting it. Covers both columns: the
+# within-person lines are obtained exactly as the between-person ones are.
+verify_modality_slopes <- function(lines, modality_slopes, rule_label_text) {
+  drawn <- lines %>%
+    filter(series != POOLED_SERIES) %>%
+    group_by(measure, column, series) %>%
+    summarise(
+      slope = {
+        first <- which.min(x)
+        last <- which.max(x)
+        (predicted[[last]] - predicted[[first]]) / (x[[last]] - x[[first]])
+      },
+      .groups = "drop"
+    )
+  expected <- modality_slopes %>%
+    filter(motion_rule == rule_label_text) %>%
+    transmute(
+      measure = factor(outcome, levels = COMBINED_MEASURE_LEVELS),
+      column = factor(
+        if_else(age_term == "between_cAge",
+                COMBINED_COLUMNS[[1]], COMBINED_COLUMNS[[2]]),
+        levels = COMBINED_COLUMNS
+      ),
+      series = factor(modality, levels = SERIES_LEVELS),
+      emtrends_slope = slope
+    )
+  comparison <- inner_join(drawn, expected,
+                           by = c("measure", "column", "series"))
+  stopifnot(
+    nrow(drawn) == length(COMBINED_MEASURE_LEVELS) * length(COMBINED_COLUMNS) *
+      (length(SERIES_LEVELS) - 1L),
+    nrow(comparison) == nrow(drawn),
+    max(abs(comparison$slope - comparison$emtrends_slope)) < 1e-8
+  )
+  comparison
+}
+
+# The within-person age x modality F tests, formatted for the caption. The
+# assertion is the point: the caption says these interactions were not
+# significant, so if that ever stops being true the run fails rather than
+# printing a false claim.
+within_interaction_summary <- function(interaction_tests, rule_label_text) {
+  tests <- interaction_tests %>%
+    filter(motion_rule == rule_label_text, age_term == "within_cAge") %>%
+    mutate(measure = factor(outcome, levels = COMBINED_MEASURE_LEVELS)) %>%
+    arrange(measure)
+  stopifnot(
+    nrow(tests) == length(COMBINED_MEASURE_LEVELS),
+    setequal(as.character(tests$measure), COMBINED_MEASURE_LEVELS),
+    all(tests$p >= .05)
+  )
+  paste(
+    sprintf(
+      "%s F(%d, %.1f) = %.2f, p = %s",
+      tolower(as.character(tests$measure)), as.integer(tests$df1),
+      tests$df2, tests$F, format_p(tests$p)
+    ),
+    collapse = "; "
+  )
+}
+
+# The caption is written beside the figure rather than drawn on it, so it can
+# say everything a reader needs without competing with six panels for space.
+# The row strips are deliberately neutral, so this is the only place that says
+# the panels plot change rather than level.
+CAPTION_WIDTH <- 78   # characters, for a plain-text caption file
+
+combined_caption <- function(figure_label, rule_label_text, interaction_tests = NULL,
+                             width = CAPTION_WIDTH) {
+  paste(
+    strwrap(
+      paste0(
+        figure_label, ". Model-implied age effects on neural distinctiveness, ",
+        "reliability and confusability under ", rule_label_text,
+        ". Each panel plots change from a reference rather than a level: every ",
+        "series is shifted by its own fitted value at age ", OLDER_ADULT_AGE,
+        " in the between-person column, and at the first wave in the ",
+        "within-person column, so all series pass through zero there. Colour ",
+        "encodes modality; the pooled series is the heavier near-black line. ",
+        "Ribbon: 95% CI of the model-implied change from the reference, zero ",
+        "width at the reference by construction. Dashed segments span the ",
+        "unsampled age range between the young and older samples. ",
+        "Colored modality-specific lines in both columns are descriptive only, ",
+        "from visualization-only fits allowing different slopes by modality. ",
+        "They carry no inferential interaction tests or modality-specific ",
+        "statistical conclusions. The heavy near-black pooled line and its ",
+        "interval use the manuscript's pooled mixed model."
+      ),
+      width = width
+    ),
+    collapse = "\n"
+  )
+}
+
+# Writes <name>_caption.txt beside the figure exports.
+write_figure_caption <- function(text, directory, name) {
+  dir.create(directory, showWarnings = FALSE, recursive = TRUE)
+  path <- file.path(directory, paste0(name, "_caption.txt"))
+  writeLines(text, path)
+  path
+}
+
+# Panel tags A-F, in reading order across the grid.
+combined_panel_tags <- function() {
+  expand_grid(
+    measure = factor(COMBINED_MEASURE_LEVELS, levels = COMBINED_MEASURE_LEVELS),
+    column = factor(COMBINED_COLUMNS, levels = COMBINED_COLUMNS)
+  ) %>%
+    mutate(label = LETTERS[seq_len(n())])
+}
+
+# ---------------------------------------------------------------------------
+# Centring.
+#
+# Each series is shifted by its OWN fitted value at the column's reference, so
+# every line passes through zero there and the panel shows model-implied change
+# from that reference rather than a level. The four series in a panel start
+# from different levels, so each needs its own shift.
+#
+# The ribbon is shifted by the same constant. It therefore remains the interval
+# around the pooled FITTED VALUE, not the interval around the change, and does
+# not close to zero width at the reference -- a proper interval for the change
+# would need the covariance between the two fitted values, which the cached
+# predictions do not carry.
+# ---------------------------------------------------------------------------
+
+# Every fitted line here is linear in x, so the value at the reference is exact
+# by linear interpolation between the endpoints, and is still correct when the
+# reference falls just outside the drawn range. The assertion keeps that
+# honest: a curved term in the specification would trip it rather than silently
+# centring on the wrong value.
+reference_value <- function(x, predicted, reference) {
+  first <- which.min(x)
+  last <- which.max(x)
+  stopifnot(x[[last]] > x[[first]])
+  slope <- (predicted[[last]] - predicted[[first]]) / (x[[last]] - x[[first]])
+  straight <- predicted[[first]] + (x - x[[first]]) * slope
+  stopifnot(max(abs(predicted - straight)) < 1e-8)
+  predicted[[first]] + (reference - x[[first]]) * slope
+}
+
+centre_combined_lines <- function(lines) {
+  centred <- lines %>%
+    group_by(measure, column, series) %>%
+    mutate(
+      offset = reference_value(
+        x, predicted, COMBINED_REFERENCES[[as.character(column[[1]])]]
+      ),
+      predicted = predicted - offset,
+      conf_low = conf_low - offset,
+      conf_high = conf_high - offset
+    ) %>%
+    ungroup()
+
+  # Every series must now pass through zero at its reference.
+  at_reference <- centred %>%
+    group_by(measure, column, series) %>%
+    summarise(
+      value = reference_value(
+        x, predicted, COMBINED_REFERENCES[[as.character(column[[1]])]]
+      ),
+      .groups = "drop"
+    )
+  stopifnot(max(abs(at_reference$value)) < 1e-8)
+  centred %>% select(-offset)
+}
+
+# Solid where there are data, dashed across the unsampled age range. By
+# construction only the between-person column has such a range.
+combined_line_layers <- function(lines, width, dash = "dashed", alpha = 1) {
+  dashed <- lines %>% filter(gap_span)
+  solid <- lines %>% filter(!is.na(solid_segment))
+  # A zero-row layer is dropped rather than added: ggh4x's per-facet scales
+  # fail on a layer whose data carries no PANEL column, and the within-person
+  # column legitimately has no dashed span at all.
+  layers <- list()
+  if (nrow(dashed) > 0) {
+    layers <- c(layers, list(geom_line(
+      data = dashed,
+      aes(x, predicted, colour = series, group = line_group),
+      linewidth = width * COMBINED_GAP_WIDTH_SCALE, linetype = dash,
+      alpha = alpha
+    )))
+  }
+  if (nrow(solid) > 0) {
+    layers <- c(layers, list(geom_line(
+      data = solid,
+      aes(x, predicted, colour = series, group = solid_group),
+      linewidth = width, alpha = alpha
+    )))
+  }
+  layers
+}
+
+# centred = FALSE draws the fitted values on the raw outcome scale, which is
+# what the figure did before, so the two versions can be compared side by side.
+# The change-CI ribbon belongs to the centred version only: on the raw scale
+# there is no reference for a change to be measured from, so that version keeps
+# the fitted-value interval.
+build_combined_figure <- function(lines, pooled_slopes, centred = TRUE) {
+  stopifnot(is.logical(centred), length(centred) == 1L, !is.na(centred))
+  if (centred) lines <- centre_combined_lines(lines)
+  pooled <- lines %>% filter(series == POOLED_SERIES)
+  modalities <- lines %>% filter(series != POOLED_SERIES)
+  ribbon <- if (centred) combined_change_ribbon(lines, pooled_slopes) else pooled
+
+  ggplot() +
+    # The zero line is the reference the series were centred on, so it belongs
+    # only to the centred version.
+    (if (centred) {
+      geom_hline(
+        yintercept = 0, colour = CENTRED_ZERO_LINE_COLOUR,
+        linewidth = CENTRED_ZERO_LINE_WIDTH
+      )
+    }) +
+    geom_ribbon(
+      data = ribbon,
+      aes(x, ymin = conf_low, ymax = conf_high,
+          group = interaction(measure, column)),
+      fill = SERIES_COLOURS[[POOLED_SERIES]], alpha = COMBINED_RIBBON_ALPHA,
+      colour = NA
     ) +
-    scale_x_continuous(limits = x_limits, expand = expansion(mult = .04),
-                       labels = scales::label_number()) +
-    labs(title = title, x = x_label, y = NULL, colour = NULL, shape = NULL) +
-    guides(colour = guide_legend(nrow = 2, byrow = TRUE),
-           shape = guide_legend(nrow = 2, byrow = TRUE)) +
+    # Pooled first, modality lines on top: where a modality line sits on the
+    # pooled estimate it stays visible rather than being hidden beneath the
+    # heavier line. In the within-person column those lines are thinner and
+    # semi-transparent, so the pooled estimate still dominates.
+    combined_line_layers(pooled, COMBINED_POOLED_WIDTH,
+                         dash = COMBINED_POOLED_DASH) +
+    combined_line_layers(
+      modalities %>% filter(column == COMBINED_COLUMNS[[1]]),
+      COMBINED_MODALITY_WIDTH
+    ) +
+    combined_line_layers(
+      modalities %>% filter(column == COMBINED_COLUMNS[[2]]),
+      COMBINED_WITHIN_MODALITY_WIDTH, alpha = COMBINED_WITHIN_MODALITY_ALPHA
+    ) +
+    geom_text(
+      data = combined_panel_tags(), aes(x = -Inf, y = Inf, label = label),
+      inherit.aes = FALSE, hjust = -0.55, vjust = 1.35,
+      fontface = "bold", size = 3.2, colour = "black"
+    ) +
+    ggh4x::facet_grid2(
+      measure ~ column,
+      scales = "free", switch = "y",
+      # Neutral row labels in both modes. That the centred panels plot change
+      # rather than level is stated in the caption file, not in the strip.
+      labeller = labeller(measure = MEASURE_STRIP_LABELS)
+    ) +
+    ggh4x::facetted_pos_scales(
+      x = list(
+        column == COMBINED_COLUMNS[[2]] ~
+          scale_x_continuous(breaks = WITHIN_TIME_BREAKS)
+      )
+    ) +
+    scale_colour_manual(
+      values = SERIES_COLOURS, breaks = SERIES_LEVELS, limits = SERIES_LEVELS,
+      name = NULL
+    ) +
+    # Headroom at the top of every panel, so a tag never lands on a line.
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.14))) +
+    guides(colour = guide_legend(nrow = 1, override.aes = list(
+      linewidth = c(
+        COMBINED_POOLED_WIDTH,
+        rep(COMBINED_MODALITY_WIDTH, length(SERIES_LEVELS) - 1)
+      )
+    ))) +
+    # One shared x title is set here and then replaced, per column, by
+    # add_column_axis_titles(); ggplot cannot render two of them on its own.
+    labs(x = AGE_AXIS_LABEL, y = NULL) +
     manuscript_theme() +
     theme(
-      plot.title = element_text(size = 9, face = "plain", hjust = 0),
-      axis.title = element_text(size = 9),
       legend.position = "bottom",
-      legend.text = element_text(size = 7),
-      legend.key.height = unit(7, "pt"),
-      legend.key.width = unit(10, "pt"),
-      legend.key.spacing.y = unit(0, "pt"),
-      legend.margin = margin(0, 0, 0, 0),
-      legend.box.spacing = unit(2, "pt")
+      legend.text = element_text(size = 8),
+      legend.key.width = unit(16, "pt"),
+      legend.box.spacing = unit(3, "pt"),
+      panel.spacing.x = unit(10, "pt"),
+      panel.spacing.y = unit(6, "pt")
     )
 }
 
-build_magnitude_figure <- function(figure_data, age_term) {
-  stopifnot(length(age_term) == 1L, age_term %in% AGE_TERMS)
-  labels <- c("Reliability", "Confusability",
-              "Signed difference (sign reversed)",
-              "Magnitude contrast")
-  row <- figure_data %>% filter(.data$age_term == .env$age_term)
-  stopifnot(nrow(row) == 16L)
-  x_limits <- range(c(0, row$estimate, row$conf_low, row$conf_high))
-  age_label <- if (age_term == "between_cAge") "Between-person" else "Within-person"
-  panels <- lapply(c("Components", "Contrasts"), function(column_name) {
-    figure4_panel(
-      row %>% filter(column == column_name), x_limits,
-      paste(age_label, tolower(column_name)),
-      if (column_name == "Contrasts") {
-        "Excess age effect on reliability (per year)"
-      } else paste(age_label, "age slope (per year)"),
-      labels
+# ggplot draws one x title for the whole grid, but the two columns are in
+# different units. The title row is therefore repopulated with one centred
+# title per panel column. A layout edit, like the retired average-column
+# divider: it writes into existing cells and must not resize anything.
+add_column_axis_titles <- function(figure,
+                                   titles = c(AGE_AXIS_LABEL, WITHIN_TIME_LABEL)) {
+  table <- ggplotGrob(figure)
+  panels <- table$layout[grep("^panel", table$layout$name), ]
+  panel_columns <- sort(unique(panels$l))
+  stopifnot(length(panel_columns) == length(titles))
+
+  index <- which(table$layout$name == "xlab-b")
+  stopifnot(length(index) == 1L)
+  title_row <- table$layout$t[[index]]
+  style <- table$grobs[[index]]$children[[1]]$gp
+
+  widths_before <- table$widths
+  # Blank the shared title, keeping the row height it already reserved.
+  table$grobs[[index]] <- nullGrob()
+  for (i in seq_along(titles)) {
+    table <- gtable::gtable_add_grob(
+      table,
+      textGrob(titles[[i]], gp = style),
+      t = title_row, b = title_row,
+      l = panel_columns[[i]], r = panel_columns[[i]],
+      name = paste0("xlab-column-", i)
     )
-  })
-  built <- lapply(panels, ggplot_build)
-  stopifnot(identical(built[[1]]$layout$panel_params[[1]]$x.range,
-                      built[[2]]$layout$panel_params[[1]]$x.range))
-  wrap_plots(panels, nrow = 1, ncol = 2) +
-    plot_layout(guides = "collect") +
-    plot_annotation(
-      caption = paste(
-        "95% CIs: solid = model-based; dashed = bootstrap percentile.",
-        "Green point and CI: negated distinctiveness-model estimate."
+  }
+  stopifnot(identical(as.character(widths_before), as.character(table$widths)))
+  table
+}
+
+# ---------------------------------------------------------------------------
+# The magnitude-contrast figure.
+#
+# One panel, one series: the POOLED magnitude contrast
+#
+#     delta = |b_reliability| - |b_confusability|
+#
+# for the two age terms, with its 95% bootstrap percentile interval read from
+# magnitude_comparison.csv. Nothing is fitted or resampled here.
+#
+# delta is sign-free. It says which component's age effect is larger in
+# MAGNITUDE, and carries no claim about the direction of either component, so
+# nothing in this figure may be labelled as an excess, a gain, or a loss.
+#
+# The modality-specific rows, the component slopes, and the signed difference
+# stay in magnitude_comparison.csv and in the supplementary table. They are
+# simply not plotted: this is a change to what is shown, not to what is
+# computed.
+# ---------------------------------------------------------------------------
+MAGNITUDE_AGE_LABELS <- c(
+  between_cAge = "Between-person age",
+  within_cAge = "Within-person age"
+)
+# Between-person on top. The rows sit half a unit apart rather than a whole
+# one: with only two of them, unit spacing left the middle of the panel empty.
+MAGNITUDE_AGE_POSITIONS <- c(between_cAge = 1.5, within_cAge = 1)
+
+# Small enough that the between-person interval, whose upper half is short,
+# stays visible on both sides of its point.
+MAGNITUDE_POINT_SIZE <- 1.5
+MAGNITUDE_WIDTH_MM <- 90        # a single journal column
+# Two rows, the axis, and the direction annotation, and nothing else: the
+# caption lives in its own file, so the panel needs no room for one.
+MAGNITUDE_HEIGHT_MM <- 36
+
+# The direction annotation sits below both plotted rows -- so it cannot collide
+# with an interval however wide it runs -- and hard against the axis line, with
+# each arrow directly beneath its own label so the two read as one unit rather
+# than as two separate bands.
+MAGNITUDE_DIRECTION_TEXT_Y <- 0.72
+MAGNITUDE_DIRECTION_ARROW_Y <- 0.50
+MAGNITUDE_DIRECTION_FLOOR <- 0.40   # panel bottom, just under the arrows
+MAGNITUDE_DIRECTION_PAD <- 0.02     # gap from zero, as a fraction of the span
+MAGNITUDE_DIRECTION_ARROW <- 0.13   # arrow length, likewise
+
+# Plotmath rather than a plain string: at this size the ASCII pipe of
+# "|b_reliability|" renders close enough to a lowercase L to be misread.
+MAGNITUDE_X_LABEL <- expression(
+  "Magnitude difference," ~ paste("|", beta[R], "|") -
+    paste("|", beta[C], "|") ~ "(per year)"
+)
+# Two lines each: anchored on zero, a one-line "larger for confusability" is
+# wider than the space between zero and the left edge of the panel, because
+# zero sits well left of centre once the within-person interval is in view.
+MAGNITUDE_DIRECTION_LEFT <- "larger for\nconfusability"
+MAGNITUDE_DIRECTION_RIGHT <- "larger for\nreliability"
+
+magnitude_plot_data <- function(magnitude, rule_label_text) {
+  rows <- magnitude %>%
+    filter(motion_rule == rule_label_text, scope == "Pooled") %>%
+    transmute(
+      age_term,
+      label = unname(MAGNITUDE_AGE_LABELS[age_term]),
+      y = unname(MAGNITUDE_AGE_POSITIONS[age_term]),
+      delta,
+      conf_low = delta_ci_lo,
+      conf_high = delta_ci_hi,
+      n_boot_ok,
+      # Kept as the one identity that still applies to a sign-free quantity:
+      # the plotted value must be the contrast of the two magnitudes.
+      delta_check = abs(b_reliability) - abs(b_confusability)
+    )
+
+  stopifnot(
+    nrow(rows) == length(AGE_TERMS),
+    setequal(rows$age_term, AGE_TERMS),
+    !anyNA(rows$delta), !anyNA(rows$conf_low), !anyNA(rows$conf_high),
+    all(is.finite(c(rows$delta, rows$conf_low, rows$conf_high))),
+    all(abs(rows$delta - rows$delta_check) < 1e-8),
+    all(rows$conf_low <= rows$delta), all(rows$delta <= rows$conf_high),
+    # A percentile interval cannot come from more draws than were requested.
+    all(rows$n_boot_ok > 0), all(rows$n_boot_ok <= MAGNITUDE_BOOT_DRAWS)
+  )
+  rows %>% select(-delta_check)
+}
+
+magnitude_caption <- function(figure_data, figure_label, rule_label_text,
+                              width = CAPTION_WIDTH) {
+  paste(
+    strwrap(
+      paste0(
+        figure_label, ". Pooled magnitude contrast of the age effects on ",
+        "reliability and confusability under ", rule_label_text,
+        ". Points are delta = |b_R| - |b_C|, where b_R is the age slope for ",
+        "reliability and b_C the corresponding slope for confusability, both ",
+        "per year on the original correlation scale. delta is sign-free: a ",
+        "positive value means the age effect is larger in magnitude for ",
+        "reliability, whichever direction either component points in. ",
+        "Intervals are 95% bootstrap percentile intervals from a cluster ",
+        "bootstrap over participants (B = ",
+        format(MAGNITUDE_BOOT_DRAWS, big.mark = ","), " draws",
+        # Only worth saying when some draw was unusable.
+        if (min(figure_data$n_boot_ok) < MAGNITUDE_BOOT_DRAWS) {
+          paste0(" requested, ", format(min(figure_data$n_boot_ok), big.mark = ","),
+                 " usable here")
+        },
+        "). Percentile intervals need not be symmetric about the point estimate."
       ),
-      theme = theme(plot.caption = element_text(
-        size = 6, hjust = 0, margin = margin(t = 2, b = 0)
-      ))
-    ) & theme(legend.position = "bottom")
+      width = width
+    ),
+    collapse = "\n"
+  )
 }
 
-# Main Figure 4 contains only the between-person age effects.
-build_figure4 <- function(figure_data) {
-  build_magnitude_figure(figure_data, "between_cAge")
-}
-
-# The within-person effects retain the identical two-panel layout in Figure S3.
-build_figure_s3 <- function(figure_data) {
-  build_magnitude_figure(figure_data, "within_cAge")
+build_magnitude_figure <- function(figure_data) {
+  stopifnot(nrow(figure_data) == length(AGE_TERMS))
+  # The direction labels are placed relative to zero in data units, so their
+  # offsets are read off the span the panel actually covers.
+  span <- diff(range(c(0, figure_data$conf_low, figure_data$conf_high)))
+  pad <- MAGNITUDE_DIRECTION_PAD * span
+  arrow_length <- MAGNITUDE_DIRECTION_ARROW * span
+  # One shared x scale across both rows. They are per-year slopes in the same
+  # units, so a shared axis is the honest display: it shows the within-person
+  # estimate for what it is, far less precise than the between-person one.
+  ggplot(figure_data, aes(delta, y)) +
+    geom_vline(xintercept = 0, colour = "grey65", linewidth = 0.3) +
+    geom_segment(
+      aes(x = conf_low, xend = conf_high, yend = y),
+      linewidth = 0.5, colour = SERIES_COLOURS[[POOLED_SERIES]]
+    ) +
+    # The same filled black square as the pooled series of the combined figure.
+    geom_point(
+      shape = 22, size = MAGNITUDE_POINT_SIZE, stroke = 0.4,
+      colour = SERIES_COLOURS[[POOLED_SERIES]],
+      fill = SERIES_COLOURS[[POOLED_SERIES]]
+    ) +
+    annotate(
+      "text", x = -pad, y = MAGNITUDE_DIRECTION_TEXT_Y,
+      label = MAGNITUDE_DIRECTION_LEFT, hjust = 1, vjust = 0.5, size = 2.0,
+      lineheight = 0.95, colour = "grey35"
+    ) +
+    annotate(
+      "text", x = pad, y = MAGNITUDE_DIRECTION_TEXT_Y,
+      label = MAGNITUDE_DIRECTION_RIGHT, hjust = 0, vjust = 0.5, size = 2.0,
+      lineheight = 0.95, colour = "grey35"
+    ) +
+    annotate(
+      "segment", x = -pad, xend = -pad - arrow_length,
+      y = MAGNITUDE_DIRECTION_ARROW_Y, yend = MAGNITUDE_DIRECTION_ARROW_Y,
+      colour = "grey35", linewidth = 0.3,
+      arrow = arrow(length = unit(1.1, "mm"), type = "closed")
+    ) +
+    annotate(
+      "segment", x = pad, xend = pad + arrow_length,
+      y = MAGNITUDE_DIRECTION_ARROW_Y, yend = MAGNITUDE_DIRECTION_ARROW_Y,
+      colour = "grey35", linewidth = 0.3,
+      arrow = arrow(length = unit(1.1, "mm"), type = "closed")
+    ) +
+    scale_y_continuous(
+      breaks = unname(MAGNITUDE_AGE_POSITIONS),
+      labels = unname(MAGNITUDE_AGE_LABELS[names(MAGNITUDE_AGE_POSITIONS)]),
+      limits = c(MAGNITUDE_DIRECTION_FLOOR, 1.78),
+      expand = expansion(mult = 0)
+    ) +
+    scale_x_continuous(
+      expand = expansion(mult = c(.16, .06)), labels = scales::label_number()
+    ) +
+    labs(x = MAGNITUDE_X_LABEL, y = NULL) +
+    manuscript_theme() +
+    theme(
+      legend.position = "none",
+      axis.title.x = element_text(size = 8.5),
+      # Leave room for the terminal tick label after corrected intervals
+      # change the automatically selected x-axis breaks (notably Figure S2).
+      plot.margin = margin(4, 14, 3, 3)
+    )
 }
 
 # ---------------------------------------------------------------------------
@@ -945,7 +1220,7 @@ figure3_average_check <- function(data, points) {
     semi_join(plotted, by = c("measure", "participant", "session"))
 
   list(
-    figure = "Figure 3",
+    figure = "Within-person figure",
     average_definition = "per-session mean across retained modalities",
     rows_compared = nrow(comparison),
     max_difference = max(abs(comparison$plotted - comparison$session_value)),
@@ -980,7 +1255,7 @@ figure2_average_check <- function(data, points) {
   stopifnot(nrow(comparison) == nrow(plotted))
 
   list(
-    figure = "Figure 2",
+    figure = "Between-person figure",
     average_definition = "participant mean across retained sessions x modalities",
     rows_compared = nrow(comparison),
     max_difference = max(abs(comparison$plotted - comparison$observation_mean)),
@@ -1021,59 +1296,235 @@ print_average_check <- function(check) {
 
 # ---------------------------------------------------------------------------
 # Checks on the grid itself, run before anything is written to disk: the grid
-# must be 3 x 4 with no empty panel, and the four panels of a row must share
-# one y scale (which is what scales = "free_y" buys and scales = "free" would
-# throw away).
+# must be 3 x 2 with no empty panel, the two panels of a row must share one y
+# scale, and the three panels of a column must share one x scale. That sharing
+# is the whole point of scales = "free" here, and is what makes the two columns
+# of a row comparable.
 # ---------------------------------------------------------------------------
-verify_manuscript_figure <- function(figure, points) {
-  panel_counts <- points %>%
-    count(measure, modality, .drop = FALSE)
-
+verify_combined_figure <- function(figure, lines) {
+  panel_counts <- lines %>% count(measure, column, .drop = FALSE)
   stopifnot(
-    nrow(panel_counts) == length(MEASURES) * length(MODALITY_COLUMNS),
+    nrow(panel_counts) ==
+      length(COMBINED_MEASURE_LEVELS) * length(COMBINED_COLUMNS),
     all(panel_counts$n > 0)
   )
 
   built <- ggplot_build(figure)
   layout <- built$layout$layout
-  stopifnot(nrow(layout) == length(MEASURES) * length(MODALITY_COLUMNS))
+  stopifnot(nrow(layout) == nrow(panel_counts))
 
-  y_limits <- map_dfr(seq_len(nrow(layout)), function(i) {
-    range <- built$layout$panel_params[[i]]$y.range
+  ranges <- map_dfr(seq_len(nrow(layout)), function(i) {
+    params <- built$layout$panel_params[[i]]
     tibble(
-      row = layout$ROW[[i]],
+      row = layout$ROW[[i]], col = layout$COL[[i]],
       measure = as.character(layout$measure[[i]]),
-      modality = as.character(layout$modality[[i]]),
-      y_min = range[[1]],
-      y_max = range[[2]]
+      column = as.character(layout$column[[i]]),
+      x_min = params$x.range[[1]], x_max = params$x.range[[2]],
+      y_min = params$y.range[[1]], y_max = params$y.range[[2]]
     )
   })
 
-  row_spread <- y_limits %>%
-    group_by(row) %>%
-    summarise(
-      spread = max(abs(y_min - first(y_min))) + max(abs(y_max - first(y_max))),
-      .groups = "drop"
-    )
-  stopifnot(all(row_spread$spread < 1e-9))
+  spread <- function(group, low, high) {
+    ranges %>%
+      group_by(.data[[group]]) %>%
+      summarise(
+        spread = max(abs(.data[[low]] - first(.data[[low]]))) +
+          max(abs(.data[[high]] - first(.data[[high]]))),
+        .groups = "drop"
+      )
+  }
+  # y identical across the columns of a row; x identical down the rows of a
+  # column. Both must hold to the last bit.
+  stopifnot(
+    all(spread("row", "y_min", "y_max")$spread < 1e-9),
+    all(spread("col", "x_min", "x_max")$spread < 1e-9)
+  )
+  # The columns are in different units, so their x ranges must NOT coincide.
+  stopifnot(nrow(distinct(ranges, col, x_min, x_max)) == length(COMBINED_COLUMNS))
 
-  list(panels = panel_counts, y_limits = y_limits)
+  list(panels = panel_counts, ranges = ranges)
 }
 
 save_manuscript_figure <- function(figure, directory, name,
-                                   height_mm = FIGURE_HEIGHT_MM) {
+                                   height_mm = FIGURE_HEIGHT_MM,
+                                   width_mm = FIGURE_WIDTH_MM) {
   dir.create(directory, showWarnings = FALSE, recursive = TRUE)
 
   ggsave(
     file.path(directory, paste0(name, ".pdf")),
     figure,
-    width = FIGURE_WIDTH_MM, height = height_mm, units = "mm"
+    width = width_mm, height = height_mm, units = "mm"
   )
   ggsave(
     file.path(directory, paste0(name, ".png")),
     figure,
-    width = FIGURE_WIDTH_MM, height = height_mm, units = "mm", dpi = FIGURE_DPI
+    width = width_mm, height = height_mm, units = "mm", dpi = FIGURE_DPI
   )
 
   file.path(directory, paste0(name, c(".pdf", ".png")))
+}
+
+# ---------------------------------------------------------------------------
+# The interactive ROI age-effect panels.
+#
+# Display only: the viewer draws these, and no numbered script writes them.
+# They are NOT the manuscript figures and are not built from the same
+# estimates. Each panel fits its own stratified per-modality model, whereas the
+# manuscript's modality-specific slopes come from the interaction model via
+# modality_trends()/emtrends -- see R/models.R. The two routes answer the same
+# question with different estimators and need not agree.
+# ---------------------------------------------------------------------------
+get_roi_age_plot_info <- function(data, modality, outcome) {
+  plot_data <- data %>%
+    filter(Modality == modality) %>%
+    select(
+      Subject, SubNum, Wave_Num, Age_DuringParticipation_, n_waves,
+      mean_age, within_cAge, between_cAge, Sex_M1, Education,
+      Modality, all_of(outcome)
+    ) %>%
+    rename(value = all_of(outcome)) %>%
+    drop_na(
+      value, Age_DuringParticipation_, within_cAge, between_cAge,
+      Sex_M1, Education, SubNum
+    )
+
+  roi_model <- lmer(
+    reformulate(
+      c(
+        "within_cAge", "between_cAge", "Sex_M1", "Education",
+        "(1 | SubNum)"
+      ),
+      response = "value"
+    ),
+    data = plot_data,
+    REML = FALSE
+  )
+
+  coefficients <- summary(roi_model)$coefficients
+  outcome_sd <- sd(plot_data$value, na.rm = TRUE)
+  within_b <- coefficients["within_cAge", "Estimate"]
+  between_b <- coefficients["between_cAge", "Estimate"]
+  within_beta <- within_b * sd(plot_data$within_cAge, na.rm = TRUE) / outcome_sd
+  between_beta <- between_b * sd(plot_data$between_cAge, na.rm = TRUE) / outcome_sd
+  stats_label <- sprintf(
+    paste0(
+      "Long.: B=%.3f, β=%.3f, p=%s\n",
+      "Cross-sec.: B=%.3f, β=%.3f, p=%s"
+    ),
+    within_b,
+    within_beta,
+    format_p(coefficients["within_cAge", "Pr(>|t|)"]),
+    between_b,
+    between_beta,
+    format_p(coefficients["between_cAge", "Pr(>|t|)"])
+  )
+
+  longitudinal_data <- plot_data %>% filter(n_waves > 1)
+  covariates <- typical_covariates(plot_data)
+
+  between_age <- seq(
+    min(plot_data$Age_DuringParticipation_, na.rm = TRUE),
+    max(plot_data$Age_DuringParticipation_, na.rm = TRUE),
+    length.out = GRID_POINTS
+  )
+  between_line <- tibble(
+    age = between_age,
+    within_cAge = 0,
+    between_cAge = between_age - OLDER_ADULT_AGE,
+    Sex_M1 = covariates$Sex_M1,
+    Education = covariates$Education,
+    SubNum = plot_data$SubNum[1]
+  ) %>%
+    mutate(predicted = predict(
+      roi_model, newdata = ., re.form = NA, allow.new.levels = TRUE
+    ))
+
+  if (nrow(longitudinal_data) > 0 &&
+      diff(range(longitudinal_data$within_cAge, na.rm = TRUE)) > 0) {
+    within_values <- seq(
+      min(longitudinal_data$within_cAge, na.rm = TRUE),
+      max(longitudinal_data$within_cAge, na.rm = TRUE),
+      length.out = GRID_POINTS
+    )
+    within_age <- mean(longitudinal_data$mean_age, na.rm = TRUE) +
+      within_values
+    within_line <- tibble(
+      age = within_age,
+      within_cAge = within_values,
+      between_cAge = 0,
+      Sex_M1 = covariates$Sex_M1,
+      Education = covariates$Education,
+      SubNum = plot_data$SubNum[1]
+    ) %>%
+      mutate(predicted = predict(
+        roi_model, newdata = ., re.form = NA, allow.new.levels = TRUE
+      ))
+  } else {
+    within_line <- tibble(age = numeric(), predicted = numeric())
+  }
+
+  list(
+    data = plot_data,
+    longitudinal_data = longitudinal_data,
+    between_line = between_line,
+    within_line = within_line,
+    stats_label = stats_label
+  )
+}
+
+# Its own theme and blue/red scale, deliberately: this is the exploratory ROI
+# display, not a manuscript panel, so it does not use manuscript_theme() or the
+# SERIES_COLOURS palette the manuscript figures share.
+make_roi_age_panel <- function(data, modality, outcome, label) {
+  plot_info <- get_roi_age_plot_info(data, modality, outcome)
+  roi_labels <- c(Aud = "Auditory", Mot = "Motor", Vis = "Visual")
+
+  point_data <- plot_info$data
+
+  figure <- ggplot(point_data, aes(Age_DuringParticipation_, value)) +
+    geom_line(
+      data = plot_info$longitudinal_data %>% arrange(SubNum, Wave_Num),
+      aes(group = SubNum),
+      colour = "#CC0000", linewidth = 0.35, alpha = 0.45
+    ) +
+    geom_point(size = 1.25, alpha = 0.5) +
+    geom_line(
+      data = plot_info$between_line,
+      aes(age, predicted, colour = "Cross-sectional"),
+      linewidth = 1.4,
+      inherit.aes = FALSE
+    ) +
+    geom_line(
+      data = plot_info$within_line,
+      aes(age, predicted, colour = "Longitudinal"),
+      linewidth = 1.4,
+      inherit.aes = FALSE
+    ) +
+    scale_colour_manual(
+      values = c("Cross-sectional" = "#3366CC", "Longitudinal" = "#CC0000"),
+      name = NULL
+    ) +
+    labs(
+      title = unname(roi_labels[[modality]]),
+      subtitle = plot_info$stats_label,
+      x = "Age",
+      y = paste("Neural", tolower(outcome)),
+      caption = label
+    ) +
+    theme_classic(base_size = 10) +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 6.8, hjust = 0.5, lineheight = 1.1),
+      plot.caption = element_text(size = 8.5, hjust = 0.5),
+      axis.title = element_text(size = 9.5),
+      axis.text = element_text(size = 8.5),
+      legend.text = element_text(size = 8.5)
+    )
+
+  list(
+    figure = figure,
+    roi_label = unname(roi_labels[[modality]]),
+    stats_label = plot_info$stats_label
+  )
 }
