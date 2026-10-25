@@ -8,6 +8,7 @@
 script/manuscript_analysis.md
 script/manuscript_analysis.knit.md
 script/manuscript_analysis_files/
+script/manuscript_analysis.html
 
 # R opens a default pdf device when the figure code measures grob widths.
 Rplots.pdf

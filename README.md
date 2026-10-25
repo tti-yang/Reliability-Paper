@@ -5,11 +5,37 @@ manuscript on age effects on neural reliability, confusability, and
 distinctiveness across auditory, motor, and visual cortex, in Waves 1-2 of the
 MiND study.
 
-**Everything lives in one document: [`script/manuscript_analysis.Rmd`](script/manuscript_analysis.Rmd).**
-Open it, run it top to bottom, and it reproduces every number, table, and
-figure in the manuscript from the four raw input files. There is no separate
-pipeline of numbered scripts to run in order and no hidden analysis step
-outside that document.
+The analysis entry point is [`script/manuscript_analysis.Rmd`](script/manuscript_analysis.Rmd),
+with bootstrap and plotting helpers in `R/`. It reads four prepared
+manuscript-analysis inputs. Upstream MRI preprocessing and preparation of
+these inputs are outside this repository's implemented scope.
+
+## Frozen reference state
+
+The manuscript analyses are corrected, validated, and submitted. The
+committed files in `output/tables/` and `output/figures/` are frozen reference
+artifacts. Structural cleanup preserves their bytes and the four input files.
+The complete pre-cleanup reference is commit
+`25118f0b5bcad8c08bc1b40865b1870c3bbb39db`.
+
+[`reproducibility/frozen-files.sha256`](reproducibility/frozen-files.sha256)
+records that commit's three active sources, four inputs, and all 22 outputs.
+The source hashes refer to the original files: approved documentation/comment
+edits during cleanup change their byte hashes while preserving executable R
+expressions. Input and output hashes continue to match the working files.
+
+**Running the Rmd writes directly into `output/` and can overwrite the
+committed reference artifacts.** Reproduce in a separate clone or checkout,
+then compare its fresh outputs with the reference commit. Choosing a different
+HTML output directory does not redirect the CSV and figure writes.
+
+## Reproducibility validation
+
+The cleaned repository was reproduced from the four documented prepared
+inputs in a fresh R session. All manuscript tables, bootstrap draws,
+captions, and PNG figures reproduced byte-identically; regenerated PDFs
+differed only in timestamp metadata. Full validation details are in
+[`reproducibility/REPRODUCIBILITY_CHECK.md`](reproducibility/REPRODUCIBILITY_CHECK.md).
 
 ## Research question
 
@@ -20,20 +46,36 @@ between-person (cross-sectional) comparison and a within-person
 
 ## Running it
 
-Open `MiND-Reliability.Rproj` in RStudio, open
-`script/manuscript_analysis.Rmd`, and knit it (or run it chunk by chunk). The
-document anchors on the project root with `here::here()`, so it does not
-matter where the project folder lives on disk, and nothing needs editing
-after a clone.
+Use a fresh R session with the working directory at the project root. In
+RStudio, open `MiND-Reliability.Rproj`, then open and knit
+`script/manuscript_analysis.Rmd`. Paths are resolved from the project root
+with `here::here()`.
+
+Install R and the analysis packages `here`, `tidyverse`, `lme4`, `lmerTest`,
+`ggh4x`, `gtable`, and `scales`, plus `rmarkdown` and `knitr`. Pandoc must be
+available to `rmarkdown` for final HTML conversion. The document's setup
+checks the analysis packages; it does not check all rendering prerequisites.
+
+From the project root in the separate reproduction checkout:
 
 ```r
 rmarkdown::render("script/manuscript_analysis.Rmd")
 ```
 
-Requires R with `here`, `tidyverse`, `lme4`, `lmerTest`, `ggh4x`, `gtable`,
-and `scales`; the document stops with the list of anything missing. A full
-run (including the 5,000-draw bootstrap under both motion rules) takes about
-2-3 minutes on a multi-core machine.
+The local HTML is generated at `script/manuscript_analysis.html` and is
+ignored by Git. It can include machine-specific output paths, so inspect it
+before sharing it. The existing validation-session versions, including
+R 4.5.2, are preserved in
+[`reproducibility/session-info.txt`](reproducibility/session-info.txt).
+This is a historical extraction from the saved rendering, not a newly
+captured environment or a guarantee for arbitrary package versions.
+
+The documented full run (5,000 bootstrap draws under both rules) took about
+2-3 minutes on a multi-core machine; runtime depends on hardware and platform.
+`MIND_BOOT_CORES` overrides the worker count with a positive integer. The
+default is up to eight physical cores; Windows always executes the bootstrap
+serially. Each draw has its own random-number stream, so worker count does
+not change the resamples.
 
 ## The two motion-exclusion rules
 
@@ -53,9 +95,10 @@ either rule; all three outcomes are already missing for every one of them, so
 including them would add no complete model observations. They are not
 recovered.
 
-## The four raw inputs
+## The four prepared inputs
 
-Read from `data/raw/` and nowhere else:
+Read from `data/raw/` and nowhere else. Despite the directory name, these
+are prepared analysis inputs, not scanner-level/raw neuroimaging data:
 
 | File | Supplies |
 | --- | --- |
@@ -64,10 +107,10 @@ Read from `data/raw/` and nowhere else:
 | `motion_exclusion_by_run_4mm.csv` | Run-level motion, keyed to the FD 0.4 mm outcomes |
 | `motion_exclusion_by_run_5mm.csv` | Run-level motion, keyed to the FD 0.5 mm outcomes |
 
-No other file in `data/raw/` is read. The study master sheets
-(`CombinedMasterGLX_*`) are not part of this repository and are not needed to
-reproduce any result here. Raw files are never modified by anything in this
-repository.
+No other data file is read. The active workflow never modifies these inputs.
+See [`data/README.md`](data/README.md) for their field definitions and scope.
+The repository audit does not establish public-sharing authorization for
+these participant-level files; consult the study's data-access documentation.
 
 ## Person-mean age decomposition
 
@@ -130,11 +173,11 @@ exact formula above, inside every draw; the 95% CI is the percentile interval
 of the resulting `delta` draws. A singular fit (a participant variance
 estimated at the zero boundary) remains eligible and is retained, not
 discarded -- see the header of `R/bootstrap.R` for why discarding it would
-not be a neutral filter. Only a modality-level, pooled contrast is computed;
+not be a neutral filter. Only a contrast pooled across modalities is computed;
 no modality-specific magnitude bootstrap is run.
 
-The resampling loop is the one piece of mechanical, repeated code kept
-outside the Rmd (`R/bootstrap.R`); the formula it refits is the one fit
+The resampling loop is kept outside the Rmd (`R/bootstrap.R`); the formula
+it refits is the one fit
 visibly in the document, and the Rmd asserts that the bootstrap's point
 estimate reproduces the corresponding fixed-effects table exactly.
 
@@ -167,65 +210,26 @@ modality lines are descriptive only. Figures 3/S2 plot only the pooled
 reliability-vs-confusability magnitude contrast and its bootstrap interval;
 no modality-specific contrast is plotted.
 
+## Sample interpretation
+
+The primary-rule analytic sample includes one Wave-2-only older adult with
+one retained auditory observation. This participant remains in the models
+but is deliberately absent from the Wave-1-anchored demographic/descriptive
+tables (Tables 1/3/S1/S2).
+
 ## Layout
 
-```
-data/raw/          read-only inputs; nothing here produces them, nothing writes to it
-R/
-  bootstrap.R      participant-cluster bootstrap for the magnitude contrast
-  plot_helpers.R   ggplot construction for Figures 2/3/S1/S2
-script/
-  manuscript_analysis.Rmd   the entire analysis, start to finish
-output/
-  tables/          8 CSVs + 2 raw bootstrap-draw files (see table above)
-  figures/         8 figure files (PNG + PDF, both rules) + 4 caption .txt files
-old/               archived pre-refactor pipeline, outputs, and the audit
-                   trail for the age-decomposition correction (see below)
+```text
+R/                 bootstrap and plotting helpers
+script/            manuscript_analysis.Rmd, the analysis entry point
+data/README.md     prepared-input field definitions and provenance limitations
+data/raw/          four prepared inputs; read-only to the analysis
+output/tables/     8 summary CSVs + 2 bootstrap-draw CSVs; frozen references
+output/figures/    8 figure files + 4 captions; frozen references
+reproducibility/   reproduction report, historical session record, SHA-256 manifest
 ```
 
-## What changed, and what didn't
-
-The corrected person-mean age decomposition documented in
-`old/age_correction/comparison_report.md` is authoritative and was not
-altered by this refactor: inclusion, motion rules, outcomes, covariates,
-modality coding, and model formulas are exactly as before. What changed is
-structural, not statistical: the former six-script pipeline
-(`script/01_prepare_data.R` through `06_assemble_manuscript.R`), the Shiny
-explorer, and the per-table/per-figure helper modules in `R/` have been
-replaced by the single Rmd above plus two small, purely mechanical helper
-files.
-
-Several analyses that are no longer part of the manuscript were retired from
-the active workflow in the same pass: the age x modality interaction
-*inference* (joint F-tests, simple slopes, pairwise slope contrasts, and the
-contextual between-vs-within coefficient test), the MAD x 3 outlier
-sensitivity analysis, the modality-specific magnitude bootstrap, the Shiny
-threshold explorer, and the manuscript assembly/manifest pipeline. None of
-these are referenced by the current manuscript tables or figures. Everything
-retired is preserved under `old/` -- nothing was deleted irreversibly.
-
-The primary-rule analytic sample includes one Wave-2-only older adult
-(SubNum 118, one retained auditory observation); this participant is
-deliberately absent from the Wave-1-anchored demographic/descriptive tables
-(Tables 1/3/S1/S2) by design, not by omission.
-
-## `old/`
-
-A complete, unmodified archive, preserved rather than deleted:
-
-- `old/script/`, `old/R/`, `old/tests/` -- the previous six-script pipeline,
-  its shared `R/` implementation, the Shiny interactive document, and their
-  regression tests.
-- `old/output/` -- the previous pipeline's table and figure exports, under
-  their old filenames.
-- `old/manuscript/` -- the previous manuscript-facing copies, under the old
-  table/figure numbering (superseded by the table above).
-- `old/age_correction/` -- the full audit trail for the age-decomposition
-  correction, including `comparison_report.md` (OLD vs CORRECTED, the
-  authoritative record of what changed and why), the archived pre-correction
-  code snapshot, and every comparison CSV the correction was validated
-  against.
-
-Nothing here is part of the active analysis. It exists so every number in the
-manuscript can be traced back through its history, not just its current
-value.
+Historical implementations and validation records remain in Git history.
+A historical participant-level master sheet also remains reachable there;
+its public-sharing status remains a separate unresolved issue. Neither the
+cleanup nor the reproducibility check establishes data-sharing authorization.

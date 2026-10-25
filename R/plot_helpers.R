@@ -26,8 +26,8 @@ AVERAGE_COLUMN <- "Average"
 MODALITY_COLUMNS <- c(AVERAGE_COLUMN, "Auditory", "Visual", "Motor")
 INTERACTION_MODALITY_LEVELS <- c("Auditory", "Visual", "Motor")
 
-# Rows of the combined figure, top to bottom. This is the Results order and is
-# deliberately NOT the order of OUTCOMES; do not sort it.
+# Rows of the combined figure, top to bottom. This is the Results order,
+# currently also the order of OUTCOMES; do not sort it.
 COMBINED_MEASURE_LEVELS <- c("Distinctiveness", "Reliability", "Confusability")
 
 # Columns of the combined figure, left to right.
@@ -88,10 +88,9 @@ COMBINED_WITHIN_MODALITY_ALPHA <- 0.5
 # unreadable.
 COMBINED_RIBBON_ALPHA <- 0.18
 
-# Ages and follow-up intervals are recorded in whole years, so points would
-# otherwise stack into vertical stripes. Jitter is horizontal only - the
-# outcome is never displaced - and is seeded so every figure and every rebuild
-# places the same point in the same place.
+# Retained participant-point calculations use seeded horizontal jitter.
+# Current Figures 2/S1 display model lines, not these points. The point
+# calculations and their checks are preserved during structural cleanup.
 JITTER_SEED <- 1
 FIGURE3_JITTER_WIDTH <- 0.15
 
@@ -102,8 +101,7 @@ WITHIN_TIME_BREAKS <- c(0, 2, 4, 6)
 FIGURE_DPI <- 300
 GRID_POINTS <- 100
 
-# Portrait, and wide enough that six panels stay legible at a two-column
-# journal width (180 mm); each panel is then about 62 x 52 mm.
+# Portrait dimensions for the combined six-panel figure: 140 x 185 mm.
 COMBINED_WIDTH_MM <- 140
 COMBINED_HEIGHT_MM <- 185
 
@@ -174,9 +172,9 @@ relabel_modality_for_display <- function(data) {
     )
 }
 
-# Both figures are drawn from one long frame with the same six columns, so the
-# row order, the column order, and the column names are set in exactly one
-# place and the two figures cannot drift apart.
+# Retained between-person and within-person point data share these six
+# columns. These points support the average checks; the displayed combined
+# figures use the separately constructed model lines.
 as_plot_frame <- function(frame) {
   frame %>%
     transmute(
@@ -236,7 +234,8 @@ mark_age_gap <- function(grid_x, observed_ages) {
   )
 }
 
-# Figure 3 has no unsampled interval, so every point of the line is solid.
+# Within-person panels in Figures 2/S1 have no unsampled age interval,
+# so every point of the line is solid.
 mark_no_gap <- function(grid_x) {
   tibble(x = grid_x, solid_segment = "all", gap_span = FALSE)
 }
@@ -265,9 +264,9 @@ with_seeded_rng <- function(seed, expression) {
 }
 
 # ---------------------------------------------------------------------------
-# Figure 2/S1: between-person age effects. The Average column is the pooled
-# main-effect model line with its 95% CI ribbon; the three modality columns
-# use the VISUALIZATION-ONLY interaction model's fitted slopes.
+# Figures 2/S1: between-person panels. The internal Average label identifies
+# the pooled main-effect line and its ribbon; the three modality series use
+# the VISUALIZATION-ONLY interaction model's fitted slopes.
 # ---------------------------------------------------------------------------
 between_person_average_points <- function(data) {
   map_dfr(OUTCOMES, function(measure_name) {
@@ -357,7 +356,7 @@ between_person_plot_data <- function(data, models, visualization_models) {
 }
 
 # ---------------------------------------------------------------------------
-# Figure 3/S2: within-person age effects, on time since each participant's own
+# Figures 2/S1: within-person panels, on time since each participant's own
 # first retained wave so every trajectory starts at zero.
 # ---------------------------------------------------------------------------
 within_prediction_grid <- function(data) {
@@ -852,9 +851,9 @@ build_magnitude_figure <- function(figure_data) {
 }
 
 # ---------------------------------------------------------------------------
-# Checks on the Average column: a summary of the modality columns, so it is
-# recomputed from the session x modality observations and compared rather
-# than trusted.
+# Checks on retained Average point data, recomputed from session x modality
+# observations. These checks concern internal point summaries, not a displayed
+# Average column; current Figures 2/S1 display between/within model lines.
 # ---------------------------------------------------------------------------
 modality_observations <- function(data) {
   map_dfr(OUTCOMES, function(measure_name) {

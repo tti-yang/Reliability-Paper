@@ -1,9 +1,9 @@
 # Participant-cluster bootstrap for the pooled reliability/confusability
 # magnitude contrast, delta = |b_reliability| - |b_confusability|.
 #
-# This is the one piece of the manuscript analysis kept out of
-# script/manuscript_analysis.Rmd: the resampling loop refits two mixed models
-# 5,000 times per motion rule, and factoring it out here keeps that mechanical
+# This helper supports script/manuscript_analysis.Rmd: the resampling loop
+# refits two mixed models 5,000 times per motion rule. Keeping it here prevents
+# that mechanical
 # repetition from burying the substantive, once-per-rule analysis in the Rmd.
 # The model formulas it refits are exactly the ones fit visibly in the Rmd;
 # nothing about the manuscript specification lives only in this file.
@@ -74,7 +74,7 @@ magnitude_boot_cores <- function() {
 #' Paired participant-cluster bootstrap of delta = |b_R| - |b_C| for both age
 #' terms (between_cAge, within_cAge), on one motion rule's analysis data.
 #'
-#' Returns a list with the point estimate (`point`, a one-row tibble), the
+#' Returns a list with point estimates (`point`, one row per age term), the
 #' 95% percentile CIs and bootstrap diagnostics (`summary`), and the raw
 #' per-draw deltas (`draws`, a B x 2 matrix with a column per age term) so
 #' they can be saved and inspected without rerunning the resampling.
