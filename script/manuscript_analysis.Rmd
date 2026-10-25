@@ -14,8 +14,8 @@ knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE)
 ```
 
 This document is the single source of truth for every analysis, table, and
-figure reported in the manuscript. It reads the raw data, applies the two
-motion-exclusion rules, builds the analytic datasets, fits every inferential
+figure reported in the manuscript. It reads the prepared inputs, applies the
+two motion-exclusion rules, builds the analytic datasets, fits every inferential
 model, runs the magnitude bootstrap, and renders every manuscript figure, in
 one pass from top to bottom, written out sequentially rather than hidden
 behind helper functions. Nothing reported in the manuscript is computed
@@ -79,11 +79,13 @@ source(here("R", "bootstrap.R"))     # participant-cluster bootstrap helper
 source(here("R", "plot_helpers.R"))  # ggplot construction for Figures 2/3/S1/S2
 ```
 
-# Load raw inputs
+# Load prepared inputs
 
-Exactly four files are read from `data/raw/`, and nothing else. The study
-master sheets (`CombinedMasterGLX_*`) are not part of this repository and are
-not needed to reproduce any result here.
+Exactly four files are read from `data/raw/`, and nothing else. These are
+prepared manuscript-analysis inputs, not scanner-level neuroimaging data.
+Upstream MRI preprocessing and preparation of these files are outside this
+repository's implemented scope; see `data/README.md` for field definitions
+and provenance limitations. No study master sheet is read by this analysis.
 
 ```{r load-raw-inputs}
 required_raw_files <- c(
@@ -229,9 +231,9 @@ already drops `NA`, but the `!is.na(exclude)` test is written out so the
 intent is explicit.
 
 ```{r apply-motion-rule}
-# Full assessed set (pre-Subgroup/Wave filter) is kept for the missing-record
-# diagnostic below; the Subgroup == 1 filter is applied when the analytic
-# datasets are built in the next section.
+# Wave-1/2 outcome rows are joined before motion exclusion for the diagnostic
+# below. Run flags already use healthy-cohort IDs; Subgroup == 1 is applied
+# explicitly to joined rows when building the analytic datasets.
 joined_fd04 <- outcomes_long_fd04 %>% left_join(run_flags_primary, by = c("Subject", "Modality"))
 joined_fd05 <- outcomes_long_fd05 %>% left_join(run_flags_liberal, by = c("Subject", "Modality"))
 
@@ -251,9 +253,10 @@ cat(
 ```
 
 Table S3 (motion accounting: runs assessed and excluded, by age group and
-modality) is built from the full run-flag sets, before the Subgroup/Wave
-filter is applied to build the analytic datasets. Its construction is
-deferred to the Tables section below, alongside the other manuscript tables.
+modality) is built from the assessed run-flag sets, before excluded runs are
+removed. Those sets already use healthy-cohort IDs from Waves 1-2. Its
+construction is deferred to the Tables section below, alongside the other
+manuscript tables.
 
 # Age decomposition
 
@@ -446,8 +449,8 @@ stopifnot(
 
 # Sample checks
 
-Sample sizes are checked against the audited analysis (`comparison_report.md`
-in the archived `old/age_correction/` snapshot) as a regression check: if the
+Sample sizes are checked against the validated reference at commit
+`25118f0b5bcad8c08bc1b40865b1870c3bbb39db` as a regression check: if the
 raw inputs or the exclusion logic ever changed, these counts would move and
 this chunk would fail. `returner_ids_primary`/`returner_ids_liberal` computed
 here are reused below when the Wave-1-anchored table samples are built.
@@ -846,8 +849,8 @@ table_s2
 
 Runs assessed/excluded by age group and modality, both rules, plus the
 age-group, modality, and grand-total aggregates. Built from the full
-run-flag sets (before the Subgroup/Wave filter that produced `analysis_primary`/
-`analysis_liberal`), joined to each subject's age group.
+assessed run-flag sets before motion exclusion, joined to each subject's age
+group. These sets already use healthy-cohort IDs from Waves 1-2.
 
 ```{r table-s3}
 flags_primary <- run_flags_primary %>%
@@ -1275,10 +1278,10 @@ write_figure_caption(combined_caption("Figure 2", RULE_LABEL_PRIMARY), FIGURE_DI
 # Figure 3
 
 The pooled magnitude contrast, primary rule: `delta = |b_R| - |b_C|` for both
-age terms, with its 95% bootstrap percentile interval, read directly from
-`magnitude_comparison.csv`. Only the pooled contrast is plotted; no
-modality-specific magnitude contrast is computed or shown anywhere in this
-document.
+age terms, with its 95% bootstrap percentile interval, taken from the same
+summary object saved as `magnitude_comparison.csv`. Only the pooled contrast
+is plotted; no modality-specific magnitude contrast is computed or shown
+anywhere in this document.
 
 ```{r figure-3-build, fig.width = 3.5, fig.height = 1.4}
 magnitude_data_primary <- magnitude_plot_data(
@@ -1376,9 +1379,9 @@ regression anywhere in the pipeline is caught here rather than discovered by
 a reader.
 
 ```{r final-checks}
-# The outcome identity holds row-by-row in the analytic data (it is NOT
-# expected to hold between separately-fitted model coefficients -- see
-# R/bootstrap.R's header and the manuscript text on additivity).
+# The outcome identity holds row-by-row in the analytic data. It is not
+# expected to hold between separately fitted model coefficients: each model
+# estimates its own covariance parameters.
 stopifnot(
   all(abs(analysis_primary$Distinctiveness -
             (analysis_primary$Reliability - analysis_primary$Confusability)) < 1e-8, na.rm = TRUE),
@@ -1387,15 +1390,41 @@ stopifnot(
 )
 cat("Outcome identity (Distinctiveness = Reliability - Confusability) holds in both analytic datasets.\n")
 
-# The Average column of each figure is a summary of the modality columns, so
-# it is recomputed from the session x modality observations and compared
-# rather than trusted.
+# Retained Average point summaries are recomputed from session x modality
+# observations and compared. These points are not displayed in the current
+# figures, whose columns show between-person and within-person model lines.
 print_average_check(between_person_average_check(analysis_primary, between_person_data_primary$points))
 print_average_check(within_person_average_check(analysis_primary, within_person_data_primary$points))
 print_average_check(between_person_average_check(analysis_liberal, between_person_data_liberal$points))
 print_average_check(within_person_average_check(analysis_liberal, within_person_data_liberal$points))
 
-# Every manuscript-facing output file this document promises to write.
+# Complete frozen-output inventory (22 files):
+# output/tables/table_1.csv
+# output/tables/table_2.csv
+# output/tables/table_3.csv
+# output/tables/table_s1.csv
+# output/tables/table_s2.csv
+# output/tables/table_s3.csv
+# output/tables/table_s4.csv
+# output/tables/magnitude_comparison.csv
+# output/tables/bootstrap_draws_primary.csv
+# output/tables/bootstrap_draws_liberal.csv
+# output/figures/figure_2.png
+# output/figures/figure_2.pdf
+# output/figures/figure_2_caption.txt
+# output/figures/figure_3.png
+# output/figures/figure_3.pdf
+# output/figures/figure_3_caption.txt
+# output/figures/figure_s1.png
+# output/figures/figure_s1.pdf
+# output/figures/figure_s1_caption.txt
+# output/figures/figure_s2.png
+# output/figures/figure_s2.pdf
+# output/figures/figure_s2_caption.txt
+# The existing executable check below covers 18 files and is preserved during
+# structural cleanup. It omits the four captions and checks existence only;
+# neither it nor its status message proves that files were freshly generated.
+# Fresh-generation validation belongs to a separate clean-room reproduction.
 expected_outputs <- c(
   file.path(TABLE_DIR, c(
     "table_1.csv", "table_2.csv", "table_3.csv", "table_s1.csv", "table_s2.csv",
