@@ -1,0 +1,1419 @@
+---
+title: "MiND Reliability: Manuscript Analysis"
+date: "`r format(Sys.Date())`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    df_print: paged
+---
+
+```{r global-options, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE)
+```
+
+This document is the single source of truth for every analysis, table, and
+figure reported in the manuscript. It reads the raw data, applies the two
+motion-exclusion rules, builds the analytic datasets, fits every inferential
+model, runs the magnitude bootstrap, and renders every manuscript figure, in
+one pass from top to bottom, written out sequentially rather than hidden
+behind helper functions. Nothing reported in the manuscript is computed
+anywhere else.
+
+Two helper files hold code that is purely mechanical repetition rather than
+analysis -- the 5,000-draw bootstrap resampling loop (`R/bootstrap.R`) and the
+ggplot/gtable construction for the two figures (`R/plot_helpers.R`). Both are
+long and fiddly for reasons that have nothing to do with the statistics, so
+they are kept out of the way; everything else -- the raw-data inclusion
+rules, the motion-exclusion rules, the person-mean age decomposition, the
+modality contrasts, every model formula, and every manuscript table -- is
+written out directly below, one rule (primary, then liberal) at a time.
+
+# Setup
+
+```{r setup}
+required_packages <- c("here", "tidyverse", "lme4", "lmerTest", "ggh4x", "gtable", "scales")
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+if (length(missing_packages) > 0) {
+  stop("Install these packages before running this document: ",
+       paste(missing_packages, collapse = ", "))
+}
+
+suppressPackageStartupMessages({
+  library(here)
+  library(tidyverse)
+  library(lme4)
+  library(lmerTest)
+  library(ggh4x)
+  library(grid)   # textGrob()/nullGrob(), used by R/plot_helpers.R
+})
+
+# here() searches upward from the working directory for MiND-Reliability.Rproj,
+# so every path below is relative to the project root regardless of whether
+# this document is knit, run(), or stepped through interactively -- no
+# absolute local paths anywhere in this document.
+RAW_DATA_DIR <- here("data", "raw")
+TABLE_DIR <- here("output", "tables")
+FIGURE_DIR <- here("output", "figures")
+dir.create(TABLE_DIR, showWarnings = FALSE, recursive = TRUE)
+dir.create(FIGURE_DIR, showWarnings = FALSE, recursive = TRUE)
+
+# ---------------------------------------------------------------------------
+# The manuscript specification, fixed here and used everywhere below.
+# ---------------------------------------------------------------------------
+OUTCOMES <- c("Distinctiveness", "Reliability", "Confusability")
+MODEL_TERMS <- c("within_cAge", "between_cAge", "Sex_M1", "Education", "aud_mot", "aud_vis")
+AGE_TERMS <- c("between_cAge", "within_cAge")
+OLDER_ADULT_AGE <- 65          # between_cAge is centred here
+
+RULE_LABEL_PRIMARY <- "FD 0.4 mm / 10% (primary)"
+RULE_LABEL_LIBERAL <- "FD 0.5 mm / 20% (liberal)"
+
+MAGNITUDE_BOOT_DRAWS <- 5000L
+MAGNITUDE_BOOT_SEED <- 20260910L
+
+source(here("R", "bootstrap.R"))     # participant-cluster bootstrap helper
+source(here("R", "plot_helpers.R"))  # ggplot construction for Figures 2/3/S1/S2
+```
+
+# Load raw inputs
+
+Exactly four files are read from `data/raw/`, and nothing else. The study
+master sheets (`CombinedMasterGLX_*`) are not part of this repository and are
+not needed to reproduce any result here.
+
+```{r load-raw-inputs}
+required_raw_files <- c(
+  "df_mind_all_mc04.csv", "df_mind_all.csv",
+  "motion_exclusion_by_run_4mm.csv", "motion_exclusion_by_run_5mm.csv"
+)
+missing_files <- required_raw_files[
+  !file.exists(file.path(RAW_DATA_DIR, required_raw_files))
+]
+if (length(missing_files) > 0) {
+  stop("Missing required raw files in ", RAW_DATA_DIR, ": ",
+       paste(missing_files, collapse = ", "))
+}
+
+# num_threads = 1 is deliberate: the multi-threaded readr parser segfaults on
+# these files.
+#
+# df_mind_all_mc04.csv is outcomes from the FD 0.4 mm scrubbing pipeline (used
+# by the primary rule); df_mind_all.csv is the FD 0.5 mm pipeline (liberal
+# rule). Each is keyed to the run-level motion file at the matching cutoff.
+outcomes_raw_fd04 <- readr::read_csv(
+  file.path(RAW_DATA_DIR, "df_mind_all_mc04.csv"), num_threads = 1, show_col_types = FALSE
+)
+outcomes_raw_fd05 <- readr::read_csv(
+  file.path(RAW_DATA_DIR, "df_mind_all.csv"), num_threads = 1, show_col_types = FALSE
+)
+motion_fd04 <- readr::read_csv(
+  file.path(RAW_DATA_DIR, "motion_exclusion_by_run_4mm.csv"), num_threads = 1, show_col_types = FALSE
+)
+motion_fd05 <- readr::read_csv(
+  file.path(RAW_DATA_DIR, "motion_exclusion_by_run_5mm.csv"), num_threads = 1, show_col_types = FALSE
+)
+
+cat(sprintf(
+  "Read %d + %d outcome rows and %d + %d motion records from data/raw/.\n",
+  nrow(outcomes_raw_fd04), nrow(outcomes_raw_fd05), nrow(motion_fd04), nrow(motion_fd05)
+))
+```
+
+# Construct analysis datasets
+
+Each outcome file is wide (one `{Modality}{Outcome}` column per
+modality-outcome pair); it is reshaped to one row per subject x wave x
+modality. Wave 3 is dropped here, before any motion accounting, so every
+later count is Waves 1-2 only -- the exploratory three-wave MIND-C analysis is
+not part of this manuscript. The primary and liberal outcome files are
+reshaped separately and identically, since they feed two different motion
+rules below.
+
+```{r reshape-outcomes}
+outcomes_long_fd04 <- outcomes_raw_fd04 %>%
+  filter(!is.na(SubNum)) %>%
+  pivot_longer(
+    cols = matches("^(Aud|Mot|Vis)(Distinctiveness|Reliability|Confusability)$"),
+    names_to = c("Modality", ".value"),
+    names_pattern = "(Aud|Mot|Vis)(.*)"
+  ) %>%
+  mutate(Modality = factor(Modality, levels = c("Aud", "Mot", "Vis"))) %>%
+  filter(Wave_Num %in% c(1, 2))
+
+outcomes_long_fd05 <- outcomes_raw_fd05 %>%
+  filter(!is.na(SubNum)) %>%
+  pivot_longer(
+    cols = matches("^(Aud|Mot|Vis)(Distinctiveness|Reliability|Confusability)$"),
+    names_to = c("Modality", ".value"),
+    names_pattern = "(Aud|Mot|Vis)(.*)"
+  ) %>%
+  mutate(Modality = factor(Modality, levels = c("Aud", "Mot", "Vis"))) %>%
+  filter(Wave_Num %in% c(1, 2))
+
+# Subgroup == 1 identifies the healthy-subject cohort the manuscript analyzes.
+# Both outcome files describe the same participants, so this is the same ID
+# set either way; both are combined defensively.
+healthy_subject_ids <- bind_rows(outcomes_long_fd04, outcomes_long_fd05) %>%
+  filter(Subgroup == 1) %>%
+  distinct(Subject) %>%
+  pull(Subject)
+
+# Used only for Table S3 (motion accounting), which breaks runs assessed down
+# by age group.
+subject_age_groups <- bind_rows(outcomes_long_fd04, outcomes_long_fd05) %>%
+  filter(Subgroup == 1) %>%
+  distinct(Subject, Age_DuringParticipation_) %>%
+  transmute(
+    Subject,
+    Age_Group = factor(
+      if_else(Age_DuringParticipation_ < OLDER_ADULT_AGE, "Young adults", "Older adults"),
+      levels = c("Young adults", "Older adults")
+    )
+  )
+
+cat(sprintf("%d healthy-cohort participants (Subgroup == 1).\n", length(healthy_subject_ids)))
+```
+
+# Motion exclusion and accounting
+
+Two motion-exclusion rules are applied to the run-level motion file at the
+matching FD cutoff:
+
+| Rule    | FD cutoff | Run excluded at |
+| ------- | --------- | ---------------- |
+| primary | 0.4 mm    | >= 10% scrubbed volumes |
+| liberal | 0.5 mm    | >= 20% scrubbed volumes |
+
+A run is identified by subject x modality x session (`placebo`) x run
+(`001`); only the healthy cohort's assessed runs are considered.
+
+```{r build-run-flags}
+run_flags_primary <- motion_fd04 %>%
+  filter(
+    subject %in% healthy_subject_ids,
+    session == "placebo",
+    run == "001",
+    experiment %in% c("auditory", "visual", "motor")
+  ) %>%
+  transmute(
+    Subject = subject,
+    Modality = recode(experiment, auditory = "Aud", motor = "Mot", visual = "Vis"),
+    pct_excluded,
+    exclude = pct_excluded >= 10
+  )
+
+run_flags_liberal <- motion_fd05 %>%
+  filter(
+    subject %in% healthy_subject_ids,
+    session == "placebo",
+    run == "001",
+    experiment %in% c("auditory", "visual", "motor")
+  ) %>%
+  transmute(
+    Subject = subject,
+    Modality = recode(experiment, auditory = "Aud", motor = "Mot", visual = "Vis"),
+    pct_excluded,
+    exclude = pct_excluded >= 20
+  )
+```
+
+Joining outcomes to motion flags can leave a subject x modality row with NO
+matching motion record at all (`exclude` is `NA`, not `FALSE`). This handling
+has already been audited (see the note below) and is preserved exactly: a
+row with no run-level motion record is DROPPED, not retained. `!exclude`
+already drops `NA`, but the `!is.na(exclude)` test is written out so the
+intent is explicit.
+
+```{r apply-motion-rule}
+# Full assessed set (pre-Subgroup/Wave filter) is kept for the missing-record
+# diagnostic below; the Subgroup == 1 filter is applied when the analytic
+# datasets are built in the next section.
+joined_fd04 <- outcomes_long_fd04 %>% left_join(run_flags_primary, by = c("Subject", "Modality"))
+joined_fd05 <- outcomes_long_fd05 %>% left_join(run_flags_liberal, by = c("Subject", "Modality"))
+
+missing_motion_primary <- joined_fd04 %>% filter(Subgroup == 1, is.na(exclude))
+missing_motion_liberal <- joined_fd05 %>% filter(Subgroup == 1, is.na(exclude))
+
+cat(sprintf(
+  "Unmatched subject x modality x wave rows with no motion record: %d (primary), %d (liberal).\n",
+  nrow(missing_motion_primary), nrow(missing_motion_liberal)
+))
+cat(
+  "These rows are excluded, not recovered or added: all three prepared outcomes\n",
+  "are already absent for them under both rules, so admitting them would not\n",
+  "add complete model observations. This policy and the join are unchanged\n",
+  "from the audited analysis.\n"
+)
+```
+
+Table S3 (motion accounting: runs assessed and excluded, by age group and
+modality) is built from the full run-flag sets, before the Subgroup/Wave
+filter is applied to build the analytic datasets. Its construction is
+deferred to the Tables section below, alongside the other manuscript tables.
+
+# Age decomposition
+
+The corrected person-mean decomposition is preserved exactly. Mean age is
+computed over **unique retained participant-wave observations**, not
+modality-level rows, so the number of modalities retained at a wave cannot
+influence a participant's mean age:
+
+```
+age_by_wave <- distinct(SubNum, Wave_Num, Age_DuringParticipation_)
+mean_age    <- mean(Age_DuringParticipation_)        # per participant
+between_cAge <- mean_age - 65
+within_cAge  <- Age_DuringParticipation_ - mean_age  # per wave
+```
+
+A one-wave participant therefore has `within_cAge == 0`; a participant
+observed at ages 70 and 74 has `mean_age = 72` and within-person ages -2 and
++2, regardless of how many modalities survived motion exclusion at either
+wave. A worked example, checked before this is ever applied to real data:
+
+```{r age-decomposition-worked-example}
+worked_example <- tibble(
+  SubNum = c(1, 1, 1, 1, 2, 2),
+  Wave_Num = c(1, 1, 1, 2, 2, 2),
+  Age_DuringParticipation_ = c(70, 70, 70, 74, 60, 60),
+  Modality = c("Aud", "Mot", "Vis", "Aud", "Aud", "Vis")
+)
+
+worked_example_age_by_wave <- worked_example %>%
+  distinct(SubNum, Wave_Num, Age_DuringParticipation_) %>%
+  group_by(SubNum) %>%
+  mutate(mean_age = mean(Age_DuringParticipation_), n_waves = n()) %>%
+  ungroup() %>%
+  mutate(
+    between_cAge = mean_age - OLDER_ADULT_AGE,
+    within_cAge = Age_DuringParticipation_ - mean_age
+  )
+
+worked_example_checked <- worked_example %>%
+  left_join(
+    worked_example_age_by_wave %>%
+      select(SubNum, Wave_Num, Age_DuringParticipation_, mean_age, within_cAge, between_cAge, n_waves),
+    by = c("SubNum", "Wave_Num", "Age_DuringParticipation_")
+  )
+stopifnot(
+  all(worked_example_checked$mean_age[worked_example_checked$SubNum == 1] == 72),
+  identical(worked_example_checked$within_cAge, c(-2, -2, -2, 2, 0, 0))
+)
+
+# Dropping a modality at a retained wave must not move that wave's age terms,
+# because mean age above is computed from distinct(SubNum, Wave_Num, Age) --
+# before any modality-level row is ever counted.
+worked_example_subset <- worked_example[c(1, 4, 5), ]
+worked_example_subset_age_by_wave <- worked_example_subset %>%
+  distinct(SubNum, Wave_Num, Age_DuringParticipation_) %>%
+  group_by(SubNum) %>%
+  mutate(mean_age = mean(Age_DuringParticipation_), n_waves = n()) %>%
+  ungroup() %>%
+  mutate(
+    between_cAge = mean_age - OLDER_ADULT_AGE,
+    within_cAge = Age_DuringParticipation_ - mean_age
+  )
+worked_example_subset_checked <- worked_example_subset %>%
+  left_join(
+    worked_example_subset_age_by_wave %>%
+      select(SubNum, Wave_Num, Age_DuringParticipation_, mean_age, within_cAge, between_cAge, n_waves),
+    by = c("SubNum", "Wave_Num", "Age_DuringParticipation_")
+  )
+stopifnot(identical(
+  worked_example_subset_checked$within_cAge,
+  worked_example_checked$within_cAge[c(1, 4, 5)]
+))
+cat("Worked example passed: mean age 72 for participant 1 (ages 70, 74); within-person ages -2/+2.\n")
+```
+
+Applied to the motion-filtered data, primary rule:
+
+```{r age-decomposition-primary}
+analysis_primary <- joined_fd04 %>%
+  filter(!is.na(exclude), !exclude, Subgroup == 1)
+
+age_by_wave_primary <- analysis_primary %>%
+  distinct(SubNum, Wave_Num, Age_DuringParticipation_)
+stopifnot(
+  !anyNA(age_by_wave_primary),
+  !anyDuplicated(age_by_wave_primary[c("SubNum", "Wave_Num")])
+)
+
+age_by_wave_primary <- age_by_wave_primary %>%
+  group_by(SubNum) %>%
+  mutate(mean_age = mean(Age_DuringParticipation_), n_waves = n()) %>%
+  ungroup() %>%
+  mutate(
+    between_cAge = mean_age - OLDER_ADULT_AGE,
+    within_cAge = Age_DuringParticipation_ - mean_age
+  )
+
+# Invariants the decomposition must satisfy: a one-wave participant has zero
+# within-person age; a participant's within-person ages sum to zero around
+# their own mean; between_cAge is a simple re-centring of mean_age and
+# nothing else.
+within_sums_primary <- tapply(age_by_wave_primary$within_cAge, age_by_wave_primary$SubNum, sum)
+stopifnot(
+  all(age_by_wave_primary$within_cAge[age_by_wave_primary$n_waves == 1] == 0),
+  all(abs(within_sums_primary) < 1e-9),
+  all(abs(age_by_wave_primary$between_cAge - (age_by_wave_primary$mean_age - OLDER_ADULT_AGE)) < 1e-9),
+  all(abs(age_by_wave_primary$within_cAge -
+    (age_by_wave_primary$Age_DuringParticipation_ - age_by_wave_primary$mean_age)) < 1e-9)
+)
+
+n_rows_before_age_join_primary <- nrow(analysis_primary)
+analysis_primary <- analysis_primary %>%
+  left_join(
+    age_by_wave_primary %>%
+      select(SubNum, Wave_Num, Age_DuringParticipation_, mean_age, within_cAge, between_cAge, n_waves),
+    by = c("SubNum", "Wave_Num", "Age_DuringParticipation_")
+  )
+stopifnot(nrow(analysis_primary) == n_rows_before_age_join_primary)
+```
+
+Applied to the motion-filtered data, liberal rule (identical steps):
+
+```{r age-decomposition-liberal}
+analysis_liberal <- joined_fd05 %>%
+  filter(!is.na(exclude), !exclude, Subgroup == 1)
+
+age_by_wave_liberal <- analysis_liberal %>%
+  distinct(SubNum, Wave_Num, Age_DuringParticipation_)
+stopifnot(
+  !anyNA(age_by_wave_liberal),
+  !anyDuplicated(age_by_wave_liberal[c("SubNum", "Wave_Num")])
+)
+
+age_by_wave_liberal <- age_by_wave_liberal %>%
+  group_by(SubNum) %>%
+  mutate(mean_age = mean(Age_DuringParticipation_), n_waves = n()) %>%
+  ungroup() %>%
+  mutate(
+    between_cAge = mean_age - OLDER_ADULT_AGE,
+    within_cAge = Age_DuringParticipation_ - mean_age
+  )
+
+within_sums_liberal <- tapply(age_by_wave_liberal$within_cAge, age_by_wave_liberal$SubNum, sum)
+stopifnot(
+  all(age_by_wave_liberal$within_cAge[age_by_wave_liberal$n_waves == 1] == 0),
+  all(abs(within_sums_liberal) < 1e-9),
+  all(abs(age_by_wave_liberal$between_cAge - (age_by_wave_liberal$mean_age - OLDER_ADULT_AGE)) < 1e-9),
+  all(abs(age_by_wave_liberal$within_cAge -
+    (age_by_wave_liberal$Age_DuringParticipation_ - age_by_wave_liberal$mean_age)) < 1e-9)
+)
+
+n_rows_before_age_join_liberal <- nrow(analysis_liberal)
+analysis_liberal <- analysis_liberal %>%
+  left_join(
+    age_by_wave_liberal %>%
+      select(SubNum, Wave_Num, Age_DuringParticipation_, mean_age, within_cAge, between_cAge, n_waves),
+    by = c("SubNum", "Wave_Num", "Age_DuringParticipation_")
+  )
+stopifnot(nrow(analysis_liberal) == n_rows_before_age_join_liberal)
+```
+
+# Modality coding
+
+Two numeric contrasts code modality exactly as specified, so a model with
+both terms estimates Auditory, Motor, and Visual as distinct levels without a
+factor:
+
+```{r modality-coding}
+analysis_primary <- analysis_primary %>%
+  mutate(
+    aud_mot = case_when(Modality == "Aud" ~ -1, Modality == "Mot" ~ 1, TRUE ~ 0),
+    aud_vis = case_when(Modality == "Aud" ~ -1, Modality == "Vis" ~ 1, TRUE ~ 0)
+  )
+
+analysis_liberal <- analysis_liberal %>%
+  mutate(
+    aud_mot = case_when(Modality == "Aud" ~ -1, Modality == "Mot" ~ 1, TRUE ~ 0),
+    aud_vis = case_when(Modality == "Aud" ~ -1, Modality == "Vis" ~ 1, TRUE ~ 0)
+  )
+
+stopifnot(
+  all(analysis_primary$aud_mot[analysis_primary$Modality == "Aud"] == -1),
+  all(analysis_primary$aud_mot[analysis_primary$Modality == "Mot"] == 1),
+  all(analysis_primary$aud_mot[analysis_primary$Modality == "Vis"] == 0),
+  all(analysis_primary$aud_vis[analysis_primary$Modality == "Aud"] == -1),
+  all(analysis_primary$aud_vis[analysis_primary$Modality == "Vis"] == 1),
+  all(analysis_primary$aud_vis[analysis_primary$Modality == "Mot"] == 0)
+)
+```
+
+# Sample checks
+
+Sample sizes are checked against the audited analysis (`comparison_report.md`
+in the archived `old/age_correction/` snapshot) as a regression check: if the
+raw inputs or the exclusion logic ever changed, these counts would move and
+this chunk would fail. `returner_ids_primary`/`returner_ids_liberal` computed
+here are reused below when the Wave-1-anchored table samples are built.
+
+```{r sample-checks-primary}
+session_rows_primary <- analysis_primary %>% distinct(SubNum, Wave_Num)
+wave1_ids_primary <- session_rows_primary$SubNum[session_rows_primary$Wave_Num == 1]
+wave2_ids_primary <- session_rows_primary$SubNum[session_rows_primary$Wave_Num == 2]
+returner_ids_primary <- intersect(wave1_ids_primary, wave2_ids_primary)
+
+n_observations_primary <- nrow(analysis_primary)
+n_sessions_primary <- nrow(session_rows_primary)
+n_participants_primary <- n_distinct(analysis_primary$SubNum)
+n_returners_primary <- length(returner_ids_primary)
+n_wave1_sessions_primary <- sum(session_rows_primary$Wave_Num == 1)
+n_wave2_sessions_primary <- sum(session_rows_primary$Wave_Num == 2)
+n_wave2_only_primary <- length(setdiff(wave2_ids_primary, wave1_ids_primary))
+
+cat(sprintf(
+  "Primary: %d observations, %d sessions, %d participants, %d returners, %d Wave-1 sessions, %d Wave-2 sessions, %d Wave-2-only participants.\n",
+  n_observations_primary, n_sessions_primary, n_participants_primary, n_returners_primary,
+  n_wave1_sessions_primary, n_wave2_sessions_primary, n_wave2_only_primary
+))
+
+stopifnot(
+  n_observations_primary == 724,
+  n_sessions_primary == 276,
+  n_participants_primary == 218,
+  n_returners_primary == 58,
+  n_wave1_sessions_primary == 217,
+  n_wave2_sessions_primary == 59,
+  n_wave2_only_primary == 1
+)
+```
+
+```{r sample-checks-liberal}
+session_rows_liberal <- analysis_liberal %>% distinct(SubNum, Wave_Num)
+wave1_ids_liberal <- session_rows_liberal$SubNum[session_rows_liberal$Wave_Num == 1]
+wave2_ids_liberal <- session_rows_liberal$SubNum[session_rows_liberal$Wave_Num == 2]
+returner_ids_liberal <- intersect(wave1_ids_liberal, wave2_ids_liberal)
+
+n_observations_liberal <- nrow(analysis_liberal)
+n_sessions_liberal <- nrow(session_rows_liberal)
+n_participants_liberal <- n_distinct(analysis_liberal$SubNum)
+n_returners_liberal <- length(returner_ids_liberal)
+n_wave1_sessions_liberal <- sum(session_rows_liberal$Wave_Num == 1)
+n_wave2_sessions_liberal <- sum(session_rows_liberal$Wave_Num == 2)
+n_wave2_only_liberal <- length(setdiff(wave2_ids_liberal, wave1_ids_liberal))
+
+cat(sprintf(
+  "Liberal: %d observations, %d sessions, %d participants, %d returners, %d Wave-1 sessions, %d Wave-2 sessions, %d Wave-2-only participants.\n",
+  n_observations_liberal, n_sessions_liberal, n_participants_liberal, n_returners_liberal,
+  n_wave1_sessions_liberal, n_wave2_sessions_liberal, n_wave2_only_liberal
+))
+
+stopifnot(
+  n_observations_liberal == 841,
+  n_sessions_liberal == 286,
+  n_participants_liberal == 226,
+  n_returners_liberal == 60,
+  n_wave1_sessions_liberal == 226,
+  n_wave2_sessions_liberal == 60,
+  n_wave2_only_liberal == 0
+)
+cat("Sample sizes match the audited analysis for both rules.\n")
+```
+
+# Manuscript tables
+
+Manuscript groups are **Wave-1-anchored**: a participant retained only at
+Wave 2 (the primary rule's one Wave-2-only older adult) remains in the
+analytic models but is deliberately absent from these demographic groups.
+Four samples are defined per rule, reused by both Table 1/S1 (participant
+characteristics) and Table 3/S2 (descriptive statistics):
+
+```{r sample-subsets-primary}
+young_wave1_primary <- analysis_primary %>%
+  filter(Wave_Num == 1, Age_DuringParticipation_ < OLDER_ADULT_AGE)
+older_wave1_primary <- analysis_primary %>%
+  filter(Wave_Num == 1, Age_DuringParticipation_ >= OLDER_ADULT_AGE)
+older_wave2_returners_primary <- analysis_primary %>%
+  filter(Wave_Num == 2, Age_DuringParticipation_ >= OLDER_ADULT_AGE, SubNum %in% returner_ids_primary)
+older_wave1_returners_primary <- older_wave1_primary %>%
+  filter(SubNum %in% returner_ids_primary)
+```
+
+```{r sample-subsets-liberal}
+young_wave1_liberal <- analysis_liberal %>%
+  filter(Wave_Num == 1, Age_DuringParticipation_ < OLDER_ADULT_AGE)
+older_wave1_liberal <- analysis_liberal %>%
+  filter(Wave_Num == 1, Age_DuringParticipation_ >= OLDER_ADULT_AGE)
+older_wave2_returners_liberal <- analysis_liberal %>%
+  filter(Wave_Num == 2, Age_DuringParticipation_ >= OLDER_ADULT_AGE, SubNum %in% returner_ids_liberal)
+older_wave1_returners_liberal <- older_wave1_liberal %>%
+  filter(SubNum %in% returner_ids_liberal)
+```
+
+## Table 1 -- primary participant characteristics
+
+Each row below is one participant-level sample, deduplicated to one row per
+participant before summarising age/education/sex.
+
+```{r table-1}
+young_wave1_primary_participants <- young_wave1_primary %>% distinct(SubNum, .keep_all = TRUE)
+older_wave1_primary_participants <- older_wave1_primary %>% distinct(SubNum, .keep_all = TRUE)
+older_wave2_returners_primary_participants <- older_wave2_returners_primary %>% distinct(SubNum, .keep_all = TRUE)
+older_wave1_returners_primary_participants <- older_wave1_returners_primary %>% distinct(SubNum, .keep_all = TRUE)
+
+table_1_young_wave1 <- tibble(
+  motion_rule = RULE_LABEL_PRIMARY,
+  sample = "Young adults, Wave 1",
+  n = nrow(young_wave1_primary_participants),
+  age_m = mean(young_wave1_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_sd = sd(young_wave1_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_min = min(young_wave1_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_max = max(young_wave1_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  education_m = mean(young_wave1_primary_participants$Education, na.rm = TRUE),
+  education_sd = sd(young_wave1_primary_participants$Education, na.rm = TRUE),
+  n_men = sum(young_wave1_primary_participants$Sex_M1 == 1, na.rm = TRUE),
+  n_women = sum(young_wave1_primary_participants$Sex_M1 == 2, na.rm = TRUE)
+)
+
+table_1_older_wave1 <- tibble(
+  motion_rule = RULE_LABEL_PRIMARY,
+  sample = "Older adults, Wave 1",
+  n = nrow(older_wave1_primary_participants),
+  age_m = mean(older_wave1_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_sd = sd(older_wave1_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_min = min(older_wave1_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_max = max(older_wave1_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  education_m = mean(older_wave1_primary_participants$Education, na.rm = TRUE),
+  education_sd = sd(older_wave1_primary_participants$Education, na.rm = TRUE),
+  n_men = sum(older_wave1_primary_participants$Sex_M1 == 1, na.rm = TRUE),
+  n_women = sum(older_wave1_primary_participants$Sex_M1 == 2, na.rm = TRUE)
+)
+
+table_1_older_wave2_returners <- tibble(
+  motion_rule = RULE_LABEL_PRIMARY,
+  sample = "Older adults, Wave 2 (returners)",
+  n = nrow(older_wave2_returners_primary_participants),
+  age_m = mean(older_wave2_returners_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_sd = sd(older_wave2_returners_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_min = min(older_wave2_returners_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_max = max(older_wave2_returners_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  education_m = mean(older_wave2_returners_primary_participants$Education, na.rm = TRUE),
+  education_sd = sd(older_wave2_returners_primary_participants$Education, na.rm = TRUE),
+  n_men = sum(older_wave2_returners_primary_participants$Sex_M1 == 1, na.rm = TRUE),
+  n_women = sum(older_wave2_returners_primary_participants$Sex_M1 == 2, na.rm = TRUE)
+)
+
+table_1_older_wave1_returners <- tibble(
+  motion_rule = RULE_LABEL_PRIMARY,
+  sample = "Older adults, Wave 1 (Wave 2 returners)",
+  n = nrow(older_wave1_returners_primary_participants),
+  age_m = mean(older_wave1_returners_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_sd = sd(older_wave1_returners_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_min = min(older_wave1_returners_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_max = max(older_wave1_returners_primary_participants$Age_DuringParticipation_, na.rm = TRUE),
+  education_m = mean(older_wave1_returners_primary_participants$Education, na.rm = TRUE),
+  education_sd = sd(older_wave1_returners_primary_participants$Education, na.rm = TRUE),
+  n_men = sum(older_wave1_returners_primary_participants$Sex_M1 == 1, na.rm = TRUE),
+  n_women = sum(older_wave1_returners_primary_participants$Sex_M1 == 2, na.rm = TRUE)
+)
+
+table_1 <- bind_rows(
+  table_1_young_wave1, table_1_older_wave1,
+  table_1_older_wave2_returners, table_1_older_wave1_returners
+)
+write_csv(table_1, file.path(TABLE_DIR, "table_1.csv"))
+table_1
+```
+
+## Table 3 -- primary descriptive statistics
+
+Each row below is one sample x modality cell, using the full modality-level
+rows of that sample (not deduplicated by participant, since each modality is
+its own observation).
+
+```{r table-3}
+table_3_young_wave1 <- young_wave1_primary %>%
+  mutate(modality = recode(as.character(Modality), Aud = "Auditory", Mot = "Motor", Vis = "Visual")) %>%
+  group_by(modality) %>%
+  summarise(
+    n = sum(!is.na(Reliability)),
+    reliability_m = mean(Reliability, na.rm = TRUE),
+    reliability_sd = sd(Reliability, na.rm = TRUE),
+    confusability_m = mean(Confusability, na.rm = TRUE),
+    confusability_sd = sd(Confusability, na.rm = TRUE),
+    distinctiveness_m = mean(Distinctiveness, na.rm = TRUE),
+    distinctiveness_sd = sd(Distinctiveness, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(motion_rule = RULE_LABEL_PRIMARY, sample = "Young adults, Wave 1", .before = 1)
+
+table_3_older_wave1 <- older_wave1_primary %>%
+  mutate(modality = recode(as.character(Modality), Aud = "Auditory", Mot = "Motor", Vis = "Visual")) %>%
+  group_by(modality) %>%
+  summarise(
+    n = sum(!is.na(Reliability)),
+    reliability_m = mean(Reliability, na.rm = TRUE),
+    reliability_sd = sd(Reliability, na.rm = TRUE),
+    confusability_m = mean(Confusability, na.rm = TRUE),
+    confusability_sd = sd(Confusability, na.rm = TRUE),
+    distinctiveness_m = mean(Distinctiveness, na.rm = TRUE),
+    distinctiveness_sd = sd(Distinctiveness, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(motion_rule = RULE_LABEL_PRIMARY, sample = "Older adults, Wave 1", .before = 1)
+
+table_3_older_wave2_returners <- older_wave2_returners_primary %>%
+  mutate(modality = recode(as.character(Modality), Aud = "Auditory", Mot = "Motor", Vis = "Visual")) %>%
+  group_by(modality) %>%
+  summarise(
+    n = sum(!is.na(Reliability)),
+    reliability_m = mean(Reliability, na.rm = TRUE),
+    reliability_sd = sd(Reliability, na.rm = TRUE),
+    confusability_m = mean(Confusability, na.rm = TRUE),
+    confusability_sd = sd(Confusability, na.rm = TRUE),
+    distinctiveness_m = mean(Distinctiveness, na.rm = TRUE),
+    distinctiveness_sd = sd(Distinctiveness, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(motion_rule = RULE_LABEL_PRIMARY, sample = "Older adults, Wave 2 (returners)", .before = 1)
+
+table_3_older_wave1_returners <- older_wave1_returners_primary %>%
+  mutate(modality = recode(as.character(Modality), Aud = "Auditory", Mot = "Motor", Vis = "Visual")) %>%
+  group_by(modality) %>%
+  summarise(
+    n = sum(!is.na(Reliability)),
+    reliability_m = mean(Reliability, na.rm = TRUE),
+    reliability_sd = sd(Reliability, na.rm = TRUE),
+    confusability_m = mean(Confusability, na.rm = TRUE),
+    confusability_sd = sd(Confusability, na.rm = TRUE),
+    distinctiveness_m = mean(Distinctiveness, na.rm = TRUE),
+    distinctiveness_sd = sd(Distinctiveness, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(motion_rule = RULE_LABEL_PRIMARY, sample = "Older adults, Wave 1 (Wave 2 returners)", .before = 1)
+
+table_3 <- bind_rows(
+  table_3_young_wave1, table_3_older_wave1,
+  table_3_older_wave2_returners, table_3_older_wave1_returners
+)
+write_csv(table_3, file.path(TABLE_DIR, "table_3.csv"))
+table_3
+```
+
+## Table S1 -- liberal participant characteristics
+
+Identical construction to Table 1, on the liberal-rule samples.
+
+```{r table-s1}
+young_wave1_liberal_participants <- young_wave1_liberal %>% distinct(SubNum, .keep_all = TRUE)
+older_wave1_liberal_participants <- older_wave1_liberal %>% distinct(SubNum, .keep_all = TRUE)
+older_wave2_returners_liberal_participants <- older_wave2_returners_liberal %>% distinct(SubNum, .keep_all = TRUE)
+older_wave1_returners_liberal_participants <- older_wave1_returners_liberal %>% distinct(SubNum, .keep_all = TRUE)
+
+table_s1_young_wave1 <- tibble(
+  motion_rule = RULE_LABEL_LIBERAL,
+  sample = "Young adults, Wave 1",
+  n = nrow(young_wave1_liberal_participants),
+  age_m = mean(young_wave1_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_sd = sd(young_wave1_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_min = min(young_wave1_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_max = max(young_wave1_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  education_m = mean(young_wave1_liberal_participants$Education, na.rm = TRUE),
+  education_sd = sd(young_wave1_liberal_participants$Education, na.rm = TRUE),
+  n_men = sum(young_wave1_liberal_participants$Sex_M1 == 1, na.rm = TRUE),
+  n_women = sum(young_wave1_liberal_participants$Sex_M1 == 2, na.rm = TRUE)
+)
+
+table_s1_older_wave1 <- tibble(
+  motion_rule = RULE_LABEL_LIBERAL,
+  sample = "Older adults, Wave 1",
+  n = nrow(older_wave1_liberal_participants),
+  age_m = mean(older_wave1_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_sd = sd(older_wave1_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_min = min(older_wave1_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_max = max(older_wave1_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  education_m = mean(older_wave1_liberal_participants$Education, na.rm = TRUE),
+  education_sd = sd(older_wave1_liberal_participants$Education, na.rm = TRUE),
+  n_men = sum(older_wave1_liberal_participants$Sex_M1 == 1, na.rm = TRUE),
+  n_women = sum(older_wave1_liberal_participants$Sex_M1 == 2, na.rm = TRUE)
+)
+
+table_s1_older_wave2_returners <- tibble(
+  motion_rule = RULE_LABEL_LIBERAL,
+  sample = "Older adults, Wave 2 (returners)",
+  n = nrow(older_wave2_returners_liberal_participants),
+  age_m = mean(older_wave2_returners_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_sd = sd(older_wave2_returners_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_min = min(older_wave2_returners_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_max = max(older_wave2_returners_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  education_m = mean(older_wave2_returners_liberal_participants$Education, na.rm = TRUE),
+  education_sd = sd(older_wave2_returners_liberal_participants$Education, na.rm = TRUE),
+  n_men = sum(older_wave2_returners_liberal_participants$Sex_M1 == 1, na.rm = TRUE),
+  n_women = sum(older_wave2_returners_liberal_participants$Sex_M1 == 2, na.rm = TRUE)
+)
+
+table_s1_older_wave1_returners <- tibble(
+  motion_rule = RULE_LABEL_LIBERAL,
+  sample = "Older adults, Wave 1 (Wave 2 returners)",
+  n = nrow(older_wave1_returners_liberal_participants),
+  age_m = mean(older_wave1_returners_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_sd = sd(older_wave1_returners_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_min = min(older_wave1_returners_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  age_max = max(older_wave1_returners_liberal_participants$Age_DuringParticipation_, na.rm = TRUE),
+  education_m = mean(older_wave1_returners_liberal_participants$Education, na.rm = TRUE),
+  education_sd = sd(older_wave1_returners_liberal_participants$Education, na.rm = TRUE),
+  n_men = sum(older_wave1_returners_liberal_participants$Sex_M1 == 1, na.rm = TRUE),
+  n_women = sum(older_wave1_returners_liberal_participants$Sex_M1 == 2, na.rm = TRUE)
+)
+
+table_s1 <- bind_rows(
+  table_s1_young_wave1, table_s1_older_wave1,
+  table_s1_older_wave2_returners, table_s1_older_wave1_returners
+)
+write_csv(table_s1, file.path(TABLE_DIR, "table_s1.csv"))
+table_s1
+```
+
+## Table S2 -- liberal descriptive statistics
+
+Identical construction to Table 3, on the liberal-rule samples.
+
+```{r table-s2}
+table_s2_young_wave1 <- young_wave1_liberal %>%
+  mutate(modality = recode(as.character(Modality), Aud = "Auditory", Mot = "Motor", Vis = "Visual")) %>%
+  group_by(modality) %>%
+  summarise(
+    n = sum(!is.na(Reliability)),
+    reliability_m = mean(Reliability, na.rm = TRUE),
+    reliability_sd = sd(Reliability, na.rm = TRUE),
+    confusability_m = mean(Confusability, na.rm = TRUE),
+    confusability_sd = sd(Confusability, na.rm = TRUE),
+    distinctiveness_m = mean(Distinctiveness, na.rm = TRUE),
+    distinctiveness_sd = sd(Distinctiveness, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(motion_rule = RULE_LABEL_LIBERAL, sample = "Young adults, Wave 1", .before = 1)
+
+table_s2_older_wave1 <- older_wave1_liberal %>%
+  mutate(modality = recode(as.character(Modality), Aud = "Auditory", Mot = "Motor", Vis = "Visual")) %>%
+  group_by(modality) %>%
+  summarise(
+    n = sum(!is.na(Reliability)),
+    reliability_m = mean(Reliability, na.rm = TRUE),
+    reliability_sd = sd(Reliability, na.rm = TRUE),
+    confusability_m = mean(Confusability, na.rm = TRUE),
+    confusability_sd = sd(Confusability, na.rm = TRUE),
+    distinctiveness_m = mean(Distinctiveness, na.rm = TRUE),
+    distinctiveness_sd = sd(Distinctiveness, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(motion_rule = RULE_LABEL_LIBERAL, sample = "Older adults, Wave 1", .before = 1)
+
+table_s2_older_wave2_returners <- older_wave2_returners_liberal %>%
+  mutate(modality = recode(as.character(Modality), Aud = "Auditory", Mot = "Motor", Vis = "Visual")) %>%
+  group_by(modality) %>%
+  summarise(
+    n = sum(!is.na(Reliability)),
+    reliability_m = mean(Reliability, na.rm = TRUE),
+    reliability_sd = sd(Reliability, na.rm = TRUE),
+    confusability_m = mean(Confusability, na.rm = TRUE),
+    confusability_sd = sd(Confusability, na.rm = TRUE),
+    distinctiveness_m = mean(Distinctiveness, na.rm = TRUE),
+    distinctiveness_sd = sd(Distinctiveness, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(motion_rule = RULE_LABEL_LIBERAL, sample = "Older adults, Wave 2 (returners)", .before = 1)
+
+table_s2_older_wave1_returners <- older_wave1_returners_liberal %>%
+  mutate(modality = recode(as.character(Modality), Aud = "Auditory", Mot = "Motor", Vis = "Visual")) %>%
+  group_by(modality) %>%
+  summarise(
+    n = sum(!is.na(Reliability)),
+    reliability_m = mean(Reliability, na.rm = TRUE),
+    reliability_sd = sd(Reliability, na.rm = TRUE),
+    confusability_m = mean(Confusability, na.rm = TRUE),
+    confusability_sd = sd(Confusability, na.rm = TRUE),
+    distinctiveness_m = mean(Distinctiveness, na.rm = TRUE),
+    distinctiveness_sd = sd(Distinctiveness, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(motion_rule = RULE_LABEL_LIBERAL, sample = "Older adults, Wave 1 (Wave 2 returners)", .before = 1)
+
+table_s2 <- bind_rows(
+  table_s2_young_wave1, table_s2_older_wave1,
+  table_s2_older_wave2_returners, table_s2_older_wave1_returners
+)
+write_csv(table_s2, file.path(TABLE_DIR, "table_s2.csv"))
+table_s2
+```
+
+## Table S3 -- motion accounting
+
+Runs assessed/excluded by age group and modality, both rules, plus the
+age-group, modality, and grand-total aggregates. Built from the full
+run-flag sets (before the Subgroup/Wave filter that produced `analysis_primary`/
+`analysis_liberal`), joined to each subject's age group.
+
+```{r table-s3}
+flags_primary <- run_flags_primary %>%
+  left_join(subject_age_groups, by = "Subject") %>%
+  mutate(
+    age_group = as.character(Age_Group),
+    modality = recode(as.character(Modality), Aud = "Auditory", Mot = "Motor", Vis = "Visual")
+  )
+
+motion_primary_by_age_modality <- flags_primary %>%
+  group_by(age_group, modality) %>%
+  summarise(
+    runs_assessed = n(), runs_excluded = sum(exclude, na.rm = TRUE),
+    pct_runs_excluded = 100 * mean(exclude, na.rm = TRUE),
+    mean_pct_volumes_scrubbed = mean(pct_excluded, na.rm = TRUE), .groups = "drop"
+  )
+motion_primary_by_age <- flags_primary %>%
+  group_by(age_group) %>%
+  summarise(
+    runs_assessed = n(), runs_excluded = sum(exclude, na.rm = TRUE),
+    pct_runs_excluded = 100 * mean(exclude, na.rm = TRUE),
+    mean_pct_volumes_scrubbed = mean(pct_excluded, na.rm = TRUE), .groups = "drop"
+  ) %>%
+  mutate(modality = "All modalities")
+motion_primary_by_modality <- flags_primary %>%
+  group_by(modality) %>%
+  summarise(
+    runs_assessed = n(), runs_excluded = sum(exclude, na.rm = TRUE),
+    pct_runs_excluded = 100 * mean(exclude, na.rm = TRUE),
+    mean_pct_volumes_scrubbed = mean(pct_excluded, na.rm = TRUE), .groups = "drop"
+  ) %>%
+  mutate(age_group = "All participants")
+motion_primary_overall <- flags_primary %>%
+  summarise(
+    runs_assessed = n(), runs_excluded = sum(exclude, na.rm = TRUE),
+    pct_runs_excluded = 100 * mean(exclude, na.rm = TRUE),
+    mean_pct_volumes_scrubbed = mean(pct_excluded, na.rm = TRUE)
+  ) %>%
+  mutate(age_group = "All participants", modality = "All modalities")
+
+table_s3_primary <- bind_rows(
+  motion_primary_by_age_modality, motion_primary_by_age,
+  motion_primary_by_modality, motion_primary_overall
+) %>%
+  mutate(motion_rule = RULE_LABEL_PRIMARY, .before = 1) %>%
+  select(motion_rule, age_group, modality, runs_assessed, runs_excluded, pct_runs_excluded, mean_pct_volumes_scrubbed)
+
+flags_liberal <- run_flags_liberal %>%
+  left_join(subject_age_groups, by = "Subject") %>%
+  mutate(
+    age_group = as.character(Age_Group),
+    modality = recode(as.character(Modality), Aud = "Auditory", Mot = "Motor", Vis = "Visual")
+  )
+
+motion_liberal_by_age_modality <- flags_liberal %>%
+  group_by(age_group, modality) %>%
+  summarise(
+    runs_assessed = n(), runs_excluded = sum(exclude, na.rm = TRUE),
+    pct_runs_excluded = 100 * mean(exclude, na.rm = TRUE),
+    mean_pct_volumes_scrubbed = mean(pct_excluded, na.rm = TRUE), .groups = "drop"
+  )
+motion_liberal_by_age <- flags_liberal %>%
+  group_by(age_group) %>%
+  summarise(
+    runs_assessed = n(), runs_excluded = sum(exclude, na.rm = TRUE),
+    pct_runs_excluded = 100 * mean(exclude, na.rm = TRUE),
+    mean_pct_volumes_scrubbed = mean(pct_excluded, na.rm = TRUE), .groups = "drop"
+  ) %>%
+  mutate(modality = "All modalities")
+motion_liberal_by_modality <- flags_liberal %>%
+  group_by(modality) %>%
+  summarise(
+    runs_assessed = n(), runs_excluded = sum(exclude, na.rm = TRUE),
+    pct_runs_excluded = 100 * mean(exclude, na.rm = TRUE),
+    mean_pct_volumes_scrubbed = mean(pct_excluded, na.rm = TRUE), .groups = "drop"
+  ) %>%
+  mutate(age_group = "All participants")
+motion_liberal_overall <- flags_liberal %>%
+  summarise(
+    runs_assessed = n(), runs_excluded = sum(exclude, na.rm = TRUE),
+    pct_runs_excluded = 100 * mean(exclude, na.rm = TRUE),
+    mean_pct_volumes_scrubbed = mean(pct_excluded, na.rm = TRUE)
+  ) %>%
+  mutate(age_group = "All participants", modality = "All modalities")
+
+table_s3_liberal <- bind_rows(
+  motion_liberal_by_age_modality, motion_liberal_by_age,
+  motion_liberal_by_modality, motion_liberal_overall
+) %>%
+  mutate(motion_rule = RULE_LABEL_LIBERAL, .before = 1) %>%
+  select(motion_rule, age_group, modality, runs_assessed, runs_excluded, pct_runs_excluded, mean_pct_volumes_scrubbed)
+
+table_s3 <- bind_rows(table_s3_primary, table_s3_liberal)
+write_csv(table_s3, file.path(TABLE_DIR, "table_s3.csv"))
+table_s3
+```
+
+# Primary mixed-effects models
+
+The manuscript's inferential specification, fit separately for each outcome
+under the primary motion rule. `lmerTest::lmer()`, `REML = FALSE`,
+Satterthwaite degrees of freedom and p-values throughout; `car::Anova()` is
+not used for manuscript inference anywhere in this document.
+
+```{r primary-models}
+model_data_primary <- analysis_primary %>%
+  drop_na(all_of(c(OUTCOMES, MODEL_TERMS, "SubNum")))
+
+model_primary_distinctiveness <- lmerTest::lmer(
+  Distinctiveness ~ within_cAge + between_cAge + Sex_M1 + Education + aud_mot + aud_vis + (1 | SubNum),
+  data = model_data_primary, REML = FALSE
+)
+summary(model_primary_distinctiveness)
+
+model_primary_reliability <- lmerTest::lmer(
+  Reliability ~ within_cAge + between_cAge + Sex_M1 + Education + aud_mot + aud_vis + (1 | SubNum),
+  data = model_data_primary, REML = FALSE
+)
+summary(model_primary_reliability)
+
+model_primary_confusability <- lmerTest::lmer(
+  Confusability ~ within_cAge + between_cAge + Sex_M1 + Education + aud_mot + aud_vis + (1 | SubNum),
+  data = model_data_primary, REML = FALSE
+)
+summary(model_primary_confusability)
+```
+
+## Table 2 -- primary fixed effects
+
+Extracted directly from the three models above; one block per outcome, then
+stacked.
+
+```{r table-2}
+coef_primary_distinctiveness <- summary(model_primary_distinctiveness, ddf = "Satterthwaite")$coefficients
+table_2_distinctiveness <- tibble(
+  motion_rule = RULE_LABEL_PRIMARY,
+  outcome = "Distinctiveness",
+  term = rownames(coef_primary_distinctiveness),
+  estimate = coef_primary_distinctiveness[, "Estimate"],
+  se = coef_primary_distinctiveness[, "Std. Error"],
+  df = coef_primary_distinctiveness[, "df"],
+  t = coef_primary_distinctiveness[, "t value"],
+  p = coef_primary_distinctiveness[, "Pr(>|t|)"],
+  n_observations = nrow(model_primary_distinctiveness@frame),
+  n_participants = n_distinct(model_primary_distinctiveness@frame$SubNum)
+)
+
+coef_primary_reliability <- summary(model_primary_reliability, ddf = "Satterthwaite")$coefficients
+table_2_reliability <- tibble(
+  motion_rule = RULE_LABEL_PRIMARY,
+  outcome = "Reliability",
+  term = rownames(coef_primary_reliability),
+  estimate = coef_primary_reliability[, "Estimate"],
+  se = coef_primary_reliability[, "Std. Error"],
+  df = coef_primary_reliability[, "df"],
+  t = coef_primary_reliability[, "t value"],
+  p = coef_primary_reliability[, "Pr(>|t|)"],
+  n_observations = nrow(model_primary_reliability@frame),
+  n_participants = n_distinct(model_primary_reliability@frame$SubNum)
+)
+
+coef_primary_confusability <- summary(model_primary_confusability, ddf = "Satterthwaite")$coefficients
+table_2_confusability <- tibble(
+  motion_rule = RULE_LABEL_PRIMARY,
+  outcome = "Confusability",
+  term = rownames(coef_primary_confusability),
+  estimate = coef_primary_confusability[, "Estimate"],
+  se = coef_primary_confusability[, "Std. Error"],
+  df = coef_primary_confusability[, "df"],
+  t = coef_primary_confusability[, "t value"],
+  p = coef_primary_confusability[, "Pr(>|t|)"],
+  n_observations = nrow(model_primary_confusability@frame),
+  n_participants = n_distinct(model_primary_confusability@frame$SubNum)
+)
+
+table_2 <- bind_rows(table_2_distinctiveness, table_2_reliability, table_2_confusability)
+write_csv(table_2, file.path(TABLE_DIR, "table_2.csv"))
+table_2
+```
+
+# Liberal mixed-effects models
+
+The identical specification, refit on the liberal-rule analytic data.
+
+```{r liberal-models}
+model_data_liberal <- analysis_liberal %>%
+  drop_na(all_of(c(OUTCOMES, MODEL_TERMS, "SubNum")))
+
+model_liberal_distinctiveness <- lmerTest::lmer(
+  Distinctiveness ~ within_cAge + between_cAge + Sex_M1 + Education + aud_mot + aud_vis + (1 | SubNum),
+  data = model_data_liberal, REML = FALSE
+)
+summary(model_liberal_distinctiveness)
+
+model_liberal_reliability <- lmerTest::lmer(
+  Reliability ~ within_cAge + between_cAge + Sex_M1 + Education + aud_mot + aud_vis + (1 | SubNum),
+  data = model_data_liberal, REML = FALSE
+)
+summary(model_liberal_reliability)
+
+model_liberal_confusability <- lmerTest::lmer(
+  Confusability ~ within_cAge + between_cAge + Sex_M1 + Education + aud_mot + aud_vis + (1 | SubNum),
+  data = model_data_liberal, REML = FALSE
+)
+summary(model_liberal_confusability)
+```
+
+## Table S4 -- liberal fixed effects
+
+```{r table-s4}
+coef_liberal_distinctiveness <- summary(model_liberal_distinctiveness, ddf = "Satterthwaite")$coefficients
+table_s4_distinctiveness <- tibble(
+  motion_rule = RULE_LABEL_LIBERAL,
+  outcome = "Distinctiveness",
+  term = rownames(coef_liberal_distinctiveness),
+  estimate = coef_liberal_distinctiveness[, "Estimate"],
+  se = coef_liberal_distinctiveness[, "Std. Error"],
+  df = coef_liberal_distinctiveness[, "df"],
+  t = coef_liberal_distinctiveness[, "t value"],
+  p = coef_liberal_distinctiveness[, "Pr(>|t|)"],
+  n_observations = nrow(model_liberal_distinctiveness@frame),
+  n_participants = n_distinct(model_liberal_distinctiveness@frame$SubNum)
+)
+
+coef_liberal_reliability <- summary(model_liberal_reliability, ddf = "Satterthwaite")$coefficients
+table_s4_reliability <- tibble(
+  motion_rule = RULE_LABEL_LIBERAL,
+  outcome = "Reliability",
+  term = rownames(coef_liberal_reliability),
+  estimate = coef_liberal_reliability[, "Estimate"],
+  se = coef_liberal_reliability[, "Std. Error"],
+  df = coef_liberal_reliability[, "df"],
+  t = coef_liberal_reliability[, "t value"],
+  p = coef_liberal_reliability[, "Pr(>|t|)"],
+  n_observations = nrow(model_liberal_reliability@frame),
+  n_participants = n_distinct(model_liberal_reliability@frame$SubNum)
+)
+
+coef_liberal_confusability <- summary(model_liberal_confusability, ddf = "Satterthwaite")$coefficients
+table_s4_confusability <- tibble(
+  motion_rule = RULE_LABEL_LIBERAL,
+  outcome = "Confusability",
+  term = rownames(coef_liberal_confusability),
+  estimate = coef_liberal_confusability[, "Estimate"],
+  se = coef_liberal_confusability[, "Std. Error"],
+  df = coef_liberal_confusability[, "df"],
+  t = coef_liberal_confusability[, "t value"],
+  p = coef_liberal_confusability[, "Pr(>|t|)"],
+  n_observations = nrow(model_liberal_confusability@frame),
+  n_participants = n_distinct(model_liberal_confusability@frame$SubNum)
+)
+
+table_s4 <- bind_rows(table_s4_distinctiveness, table_s4_reliability, table_s4_confusability)
+write_csv(table_s4, file.path(TABLE_DIR, "table_s4.csv"))
+table_s4
+```
+
+# Participant-level magnitude bootstrap
+
+For both motion rules:
+
+```
+delta = |beta_Reliability| - |beta_Confusability|
+```
+
+for the between-person and within-person age terms separately, using
+participant-level cluster resampling (5,000 draws, seed 20260910): every
+retained wave/modality belonging to a sampled participant travels together,
+and each duplicated copy of a resampled participant gets a fresh cluster ID
+so it contributes an independent random-intercept level. The Reliability and
+Confusability models are refit within every draw and the 95% CI is the
+percentile interval of the resulting `delta` draws. A singular fit (a
+participant variance at the zero boundary) remains eligible and is retained,
+not discarded -- see `R/bootstrap.R` for why. The resampling loop itself
+lives there; the formula it refits is the one fit visibly above.
+
+```{r magnitude-bootstrap}
+boot_cores <- magnitude_boot_cores()
+cat("Bootstrapping with", boot_cores, "worker(s); B =", MAGNITUDE_BOOT_DRAWS,
+    "; seed =", MAGNITUDE_BOOT_SEED, "\n")
+
+boot_primary <- magnitude_bootstrap(
+  model_data_primary, AGE_TERMS,
+  B = MAGNITUDE_BOOT_DRAWS, seed = MAGNITUDE_BOOT_SEED, cores = boot_cores
+)
+cat(sprintf(
+  "Primary: %d/%d draws singular (retained); %d/%d usable per age term.\n",
+  sum(boot_primary$singular_draws), MAGNITUDE_BOOT_DRAWS,
+  min(boot_primary$summary$n_boot_ok), MAGNITUDE_BOOT_DRAWS
+))
+
+boot_liberal <- magnitude_bootstrap(
+  model_data_liberal, AGE_TERMS,
+  B = MAGNITUDE_BOOT_DRAWS, seed = MAGNITUDE_BOOT_SEED, cores = boot_cores
+)
+cat(sprintf(
+  "Liberal: %d/%d draws singular (retained); %d/%d usable per age term.\n",
+  sum(boot_liberal$singular_draws), MAGNITUDE_BOOT_DRAWS,
+  min(boot_liberal$summary$n_boot_ok), MAGNITUDE_BOOT_DRAWS
+))
+```
+
+The bootstrap refits the identical formula on the identical data, so its
+point estimates must reproduce the pooled Reliability/Confusability slopes
+in Tables 2/S4 exactly (to floating-point noise):
+
+```{r check-bootstrap-point-estimates}
+stopifnot(
+  abs(boot_primary$point$b_reliability[boot_primary$point$age_term == "between_cAge"] -
+      table_2$estimate[table_2$outcome == "Reliability" & table_2$term == "between_cAge"]) < 1e-8,
+  abs(boot_primary$point$b_reliability[boot_primary$point$age_term == "within_cAge"] -
+      table_2$estimate[table_2$outcome == "Reliability" & table_2$term == "within_cAge"]) < 1e-8,
+  abs(boot_primary$point$b_confusability[boot_primary$point$age_term == "between_cAge"] -
+      table_2$estimate[table_2$outcome == "Confusability" & table_2$term == "between_cAge"]) < 1e-8,
+  abs(boot_primary$point$b_confusability[boot_primary$point$age_term == "within_cAge"] -
+      table_2$estimate[table_2$outcome == "Confusability" & table_2$term == "within_cAge"]) < 1e-8
+)
+stopifnot(
+  abs(boot_liberal$point$b_reliability[boot_liberal$point$age_term == "between_cAge"] -
+      table_s4$estimate[table_s4$outcome == "Reliability" & table_s4$term == "between_cAge"]) < 1e-8,
+  abs(boot_liberal$point$b_reliability[boot_liberal$point$age_term == "within_cAge"] -
+      table_s4$estimate[table_s4$outcome == "Reliability" & table_s4$term == "within_cAge"]) < 1e-8,
+  abs(boot_liberal$point$b_confusability[boot_liberal$point$age_term == "between_cAge"] -
+      table_s4$estimate[table_s4$outcome == "Confusability" & table_s4$term == "between_cAge"]) < 1e-8,
+  abs(boot_liberal$point$b_confusability[boot_liberal$point$age_term == "within_cAge"] -
+      table_s4$estimate[table_s4$outcome == "Confusability" & table_s4$term == "within_cAge"]) < 1e-8
+)
+cat("Bootstrap point estimates match Tables 2/S4 exactly.\n")
+
+magnitude_comparison <- bind_rows(
+  boot_primary$summary %>% mutate(motion_rule = RULE_LABEL_PRIMARY, .before = 1),
+  boot_liberal$summary %>% mutate(motion_rule = RULE_LABEL_LIBERAL, .before = 1)
+)
+write_csv(magnitude_comparison, file.path(TABLE_DIR, "magnitude_comparison.csv"))
+magnitude_comparison
+```
+
+Raw bootstrap draws are saved so the full resampling distribution can be
+inspected without rerunning 5,000 iterations per rule:
+
+```{r save-bootstrap-draws}
+draws_primary <- as_tibble(boot_primary$draws)
+draws_primary <- bind_cols(draw = seq_len(nrow(draws_primary)), draws_primary)
+write_csv(draws_primary, file.path(TABLE_DIR, "bootstrap_draws_primary.csv"))
+
+draws_liberal <- as_tibble(boot_liberal$draws)
+draws_liberal <- bind_cols(draw = seq_len(nrow(draws_liberal)), draws_liberal)
+write_csv(draws_liberal, file.path(TABLE_DIR, "bootstrap_draws_liberal.csv"))
+```
+
+# Figure 2
+
+The combined age-effect figure: a 3 x 2 grid, outcome by row (distinctiveness,
+reliability, confusability) and age term by column (between-person age,
+within-person years from first wave), under the primary motion rule. The
+heavy near-black pooled line in every panel comes from the exact model
+reported in Table 2. The three colored modality lines are **descriptive
+only**, from a VISUALIZATION-ONLY interaction model fit below: they carry no
+inferential interaction test, no simple-slope estimate, and no manuscript
+conclusion, and the caption does not depend on any interaction p-value.
+
+```{r figure-2-visualization-models}
+# VISUALIZATION ONLY. These allow each modality its own age slope purely to
+# draw descriptive colored lines; no test on this interaction is computed or
+# reported anywhere. contr.sum gives a valid contrast coding for a factor
+# inside an interaction; it is set on this copy of the data only; the pooled
+# models above (and their contrasts) are untouched.
+vis_data_primary <- analysis_primary %>%
+  mutate(
+    Modality = factor(
+      recode(as.character(Modality), Aud = "Auditory", Vis = "Visual", Mot = "Motor"),
+      levels = INTERACTION_MODALITY_LEVELS
+    )
+  ) %>%
+  drop_na(all_of(c(OUTCOMES, "between_cAge", "within_cAge", "Sex_M1", "Education", "SubNum", "Modality")))
+contrasts(vis_data_primary$Modality) <- "contr.sum"
+
+vis_model_primary_distinctiveness <- lmerTest::lmer(
+  Distinctiveness ~ (between_cAge + within_cAge) * Modality + Sex_M1 + Education + (1 | SubNum),
+  data = vis_data_primary, REML = FALSE
+)
+vis_model_primary_reliability <- lmerTest::lmer(
+  Reliability ~ (between_cAge + within_cAge) * Modality + Sex_M1 + Education + (1 | SubNum),
+  data = vis_data_primary, REML = FALSE
+)
+vis_model_primary_confusability <- lmerTest::lmer(
+  Confusability ~ (between_cAge + within_cAge) * Modality + Sex_M1 + Education + (1 | SubNum),
+  data = vis_data_primary, REML = FALSE
+)
+```
+
+`R/plot_helpers.R`'s figure-building functions take the three models of a
+rule as one named list; this is the one place in this document a list of
+models is built, because the plotting code needs to look a model up by
+outcome name:
+
+```{r figure-2-build, fig.width = 5.5, fig.height = 7.3}
+models_primary <- list(
+  Distinctiveness = model_primary_distinctiveness,
+  Reliability = model_primary_reliability,
+  Confusability = model_primary_confusability
+)
+vis_models_primary <- list(
+  Distinctiveness = vis_model_primary_distinctiveness,
+  Reliability = vis_model_primary_reliability,
+  Confusability = vis_model_primary_confusability
+)
+
+between_person_data_primary <- between_person_plot_data(analysis_primary, models_primary, vis_models_primary)
+within_person_data_primary <- within_person_plot_data(analysis_primary, models_primary, vis_models_primary)
+combined_lines_primary <- combined_plot_data(between_person_data_primary, within_person_data_primary)
+
+figure_2 <- build_combined_figure(
+  combined_lines_primary, combined_pooled_slopes(table_2, RULE_LABEL_PRIMARY), centred = TRUE
+)
+invisible(verify_combined_figure(figure_2, combined_lines_primary))
+figure_2_grob <- add_column_axis_titles(figure_2)
+grid::grid.newpage(); grid::grid.draw(figure_2_grob)
+
+save_manuscript_figure(figure_2_grob, FIGURE_DIR, "figure_2",
+                       height_mm = COMBINED_HEIGHT_MM, width_mm = COMBINED_WIDTH_MM)
+write_figure_caption(combined_caption("Figure 2", RULE_LABEL_PRIMARY), FIGURE_DIR, "figure_2")
+```
+
+# Figure 3
+
+The pooled magnitude contrast, primary rule: `delta = |b_R| - |b_C|` for both
+age terms, with its 95% bootstrap percentile interval, read directly from
+`magnitude_comparison.csv`. Only the pooled contrast is plotted; no
+modality-specific magnitude contrast is computed or shown anywhere in this
+document.
+
+```{r figure-3-build, fig.width = 3.5, fig.height = 1.4}
+magnitude_data_primary <- magnitude_plot_data(
+  magnitude_comparison %>% filter(motion_rule == RULE_LABEL_PRIMARY)
+)
+figure_3 <- build_magnitude_figure(magnitude_data_primary)
+print(figure_3)
+
+save_manuscript_figure(figure_3, FIGURE_DIR, "figure_3",
+                       height_mm = MAGNITUDE_HEIGHT_MM, width_mm = MAGNITUDE_WIDTH_MM)
+write_figure_caption(
+  magnitude_caption(magnitude_data_primary, "Figure 3", RULE_LABEL_PRIMARY), FIGURE_DIR, "figure_3"
+)
+```
+
+# Figure S1
+
+Figure 2 under the liberal motion rule.
+
+```{r figure-s1-visualization-models}
+vis_data_liberal <- analysis_liberal %>%
+  mutate(
+    Modality = factor(
+      recode(as.character(Modality), Aud = "Auditory", Vis = "Visual", Mot = "Motor"),
+      levels = INTERACTION_MODALITY_LEVELS
+    )
+  ) %>%
+  drop_na(all_of(c(OUTCOMES, "between_cAge", "within_cAge", "Sex_M1", "Education", "SubNum", "Modality")))
+contrasts(vis_data_liberal$Modality) <- "contr.sum"
+
+vis_model_liberal_distinctiveness <- lmerTest::lmer(
+  Distinctiveness ~ (between_cAge + within_cAge) * Modality + Sex_M1 + Education + (1 | SubNum),
+  data = vis_data_liberal, REML = FALSE
+)
+vis_model_liberal_reliability <- lmerTest::lmer(
+  Reliability ~ (between_cAge + within_cAge) * Modality + Sex_M1 + Education + (1 | SubNum),
+  data = vis_data_liberal, REML = FALSE
+)
+vis_model_liberal_confusability <- lmerTest::lmer(
+  Confusability ~ (between_cAge + within_cAge) * Modality + Sex_M1 + Education + (1 | SubNum),
+  data = vis_data_liberal, REML = FALSE
+)
+```
+
+```{r figure-s1-build, fig.width = 5.5, fig.height = 7.3}
+models_liberal <- list(
+  Distinctiveness = model_liberal_distinctiveness,
+  Reliability = model_liberal_reliability,
+  Confusability = model_liberal_confusability
+)
+vis_models_liberal <- list(
+  Distinctiveness = vis_model_liberal_distinctiveness,
+  Reliability = vis_model_liberal_reliability,
+  Confusability = vis_model_liberal_confusability
+)
+
+between_person_data_liberal <- between_person_plot_data(analysis_liberal, models_liberal, vis_models_liberal)
+within_person_data_liberal <- within_person_plot_data(analysis_liberal, models_liberal, vis_models_liberal)
+combined_lines_liberal <- combined_plot_data(between_person_data_liberal, within_person_data_liberal)
+
+figure_s1 <- build_combined_figure(
+  combined_lines_liberal, combined_pooled_slopes(table_s4, RULE_LABEL_LIBERAL), centred = TRUE
+)
+invisible(verify_combined_figure(figure_s1, combined_lines_liberal))
+figure_s1_grob <- add_column_axis_titles(figure_s1)
+grid::grid.newpage(); grid::grid.draw(figure_s1_grob)
+
+save_manuscript_figure(figure_s1_grob, FIGURE_DIR, "figure_s1",
+                       height_mm = COMBINED_HEIGHT_MM, width_mm = COMBINED_WIDTH_MM)
+write_figure_caption(combined_caption("Figure S1", RULE_LABEL_LIBERAL), FIGURE_DIR, "figure_s1")
+```
+
+# Figure S2
+
+Figure 3 under the liberal motion rule.
+
+```{r figure-s2-build, fig.width = 3.5, fig.height = 1.4}
+magnitude_data_liberal <- magnitude_plot_data(
+  magnitude_comparison %>% filter(motion_rule == RULE_LABEL_LIBERAL)
+)
+figure_s2 <- build_magnitude_figure(magnitude_data_liberal)
+print(figure_s2)
+
+save_manuscript_figure(figure_s2, FIGURE_DIR, "figure_s2",
+                       height_mm = MAGNITUDE_HEIGHT_MM, width_mm = MAGNITUDE_WIDTH_MM)
+write_figure_caption(
+  magnitude_caption(magnitude_data_liberal, "Figure S2", RULE_LABEL_LIBERAL), FIGURE_DIR, "figure_s2"
+)
+```
+
+# Final validation checks
+
+Independent cross-checks of everything built above, run after the fact so a
+regression anywhere in the pipeline is caught here rather than discovered by
+a reader.
+
+```{r final-checks}
+# The outcome identity holds row-by-row in the analytic data (it is NOT
+# expected to hold between separately-fitted model coefficients -- see
+# R/bootstrap.R's header and the manuscript text on additivity).
+stopifnot(
+  all(abs(analysis_primary$Distinctiveness -
+            (analysis_primary$Reliability - analysis_primary$Confusability)) < 1e-8, na.rm = TRUE),
+  all(abs(analysis_liberal$Distinctiveness -
+            (analysis_liberal$Reliability - analysis_liberal$Confusability)) < 1e-8, na.rm = TRUE)
+)
+cat("Outcome identity (Distinctiveness = Reliability - Confusability) holds in both analytic datasets.\n")
+
+# The Average column of each figure is a summary of the modality columns, so
+# it is recomputed from the session x modality observations and compared
+# rather than trusted.
+print_average_check(between_person_average_check(analysis_primary, between_person_data_primary$points))
+print_average_check(within_person_average_check(analysis_primary, within_person_data_primary$points))
+print_average_check(between_person_average_check(analysis_liberal, between_person_data_liberal$points))
+print_average_check(within_person_average_check(analysis_liberal, within_person_data_liberal$points))
+
+# Every manuscript-facing output file this document promises to write.
+expected_outputs <- c(
+  file.path(TABLE_DIR, c(
+    "table_1.csv", "table_2.csv", "table_3.csv", "table_s1.csv", "table_s2.csv",
+    "table_s3.csv", "table_s4.csv", "magnitude_comparison.csv",
+    "bootstrap_draws_primary.csv", "bootstrap_draws_liberal.csv"
+  )),
+  file.path(FIGURE_DIR, c(
+    "figure_2.png", "figure_2.pdf", "figure_3.png", "figure_3.pdf",
+    "figure_s1.png", "figure_s1.pdf", "figure_s2.png", "figure_s2.pdf"
+  ))
+)
+missing_outputs <- expected_outputs[!file.exists(expected_outputs)]
+stopifnot(length(missing_outputs) == 0)
+cat("All", length(expected_outputs), "manuscript-facing output files were written to output/.\n")
+```
+
+# Session information
+
+```{r session-info}
+sessionInfo()
+```

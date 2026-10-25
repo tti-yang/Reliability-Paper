@@ -3,12 +3,11 @@
 .Rproj.user/
 .DS_Store
 
-# Derived and rebuilt by script/06_assemble_manuscript.R from output/. Not
-# tracked, because a second committed copy could disagree with output/.
-manuscript/
-
-# Stage handoff, rebuilt in seconds by script/01_prepare_data.R.
-data/derived/*.rds
+# Knitting script/manuscript_analysis.Rmd without pandoc (or interactively)
+# leaves these intermediates beside it; they are not part of the document.
+script/manuscript_analysis.md
+script/manuscript_analysis.knit.md
+script/manuscript_analysis_files/
 
 # R opens a default pdf device when the figure code measures grob widths.
 Rplots.pdf
